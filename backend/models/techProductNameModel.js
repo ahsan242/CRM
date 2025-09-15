@@ -16,10 +16,7 @@ module.exports = (sequelize) => {
   );
 
   TechProductName.associate = (models) => {
-    TechProductName.hasMany(models.TechProduct, { 
-      foreignKey: "specId",
-      as: "techProducts" 
-    });
+    TechProductName.hasMany(models.TechProduct, {   foreignKey: "specId", as: "techProducts" });
   };
 
   return TechProductName;

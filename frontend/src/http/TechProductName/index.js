@@ -12,10 +12,10 @@
 // export default api;
 
 
-import api from "./api"; // axios instance with baseURL
+import api from "../api"; // axios instance with baseURL
 
 // ================== TECH PRODUCT NAME ROUTES ==================
-export const getTechProductNames = () => api.get("/api/tech-product-names");
+export const getTechProductNames = () => api.get("/api/techproductnames");
 
 export const getTechProductNameById = (id) =>
   api.get(`/api/tech-product-names/${id}`);

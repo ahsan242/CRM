@@ -17,11 +17,8 @@ module.exports = (sequelize) => {
   );
 
   TechProduct.associate = (models) => {
-    TechProduct.belongsTo(models.Product, { foreignKey: "productId", as: "product" });
-    TechProduct.belongsTo(models.TechProductName, { 
-      foreignKey: "specId",
-      as: "specification" 
-    });
+    TechProduct.belongsTo(models.Product, {foreignKey: "productId", as: "product"});
+    TechProduct.belongsTo(models.TechProductName, {foreignKey: "specId", as: "specification"});
   };
 
   return TechProduct;

@@ -1,11 +1,8 @@
-
-
-
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import ReactTable from '@/components/Table';
 import IconifyIcon from '@/components/wrappers/IconifyIcon';
-import { getCategories } from '@/http/Category';
+import { getSubCategories } from '@/http/SubCategory';
 
 const SubCategoriesListTable = () => {
   const [subcategories, setSubcategories] = useState([]);
@@ -16,9 +13,23 @@ const SubCategoriesListTable = () => {
     const fetchSubcategories = async () => {
       try {
         setLoading(true);
-        const response = await getCategories();
-        console.log('Fetched categories:', response.data);
-        setSubcategories(response.data);
+        const response = await getSubCategories();
+        console.log('Fetched Subcategories response:', response);
+        
+        // Check the actual structure of the response
+        if (Array.isArray(response)) {
+          // If the response is already the array
+          setSubcategories(response);
+          console.log('Fetched Subcategories:', response);
+        } else if (response && Array.isArray(response.data)) {
+          // If the response has a data property that contains the array
+          setSubcategories(response.data);
+          console.log('Fetched Subcategories:', response.data);
+        } else {
+          // Handle other possible response structures
+          console.warn('Unexpected response structure:', response);
+          setSubcategories([]);
+        }
       } catch (err) {
         setError(err.message || 'Failed to fetch subcategories');
         console.error('Error fetching subcategories:', err);
@@ -32,16 +43,16 @@ const SubCategoriesListTable = () => {
 
   const columns = [
     {
+      header: 'ID',
+      accessorKey: 'id',
+    },
+    {
       header: 'Subcategory Name',
       accessorKey: 'title',
     },
     {
-      header: 'Meta Title',
-      accessorKey: 'metaTitle',
-    },
-    {
-      header: 'Meta Description',
-      accessorKey: 'metaDescp',
+      header: 'Parent ID',
+      accessorKey: 'parentId',
     },
     {
       header: 'Action',
@@ -67,29 +78,25 @@ const SubCategoriesListTable = () => {
   ];
 
   const handleEdit = (subcategory) => {
-    // Implement edit functionality
     console.log('Edit subcategory:', subcategory);
-    // You might want to open a modal or navigate to an edit page
   };
 
   const handleDelete = (subcategoryId) => {
-    // Implement delete functionality
     console.log('Delete subcategory:', subcategoryId);
-    // You might want to show a confirmation dialog first
   };
 
   const pageSizeList = [2, 5, 10, 20, 50];
 
   if (loading) {
-    return <div className="text-center py-4">Loading subcategorys...</div>;
+    return <div className="text-center py-4">Loading subcategories...</div>;
   }
 
   if (error) {
     return <div className="alert alert-danger">Error: {error}</div>;
   }
 
-  if (subcategories.length === 0) {
-    return <div className="alert alert-info">No Subcategorys found.</div>;
+  if (!subcategories || subcategories.length === 0) {
+    return <div className="alert alert-info">No subcategories found.</div>;
   }
 
   return (

@@ -15,7 +15,7 @@ exports.createTechProduct = async (req, res) => {
 exports.getTechProducts = async (req, res) => {
   try {
     const techProducts = await TechProduct.findAll({
-      include: [TechProductName],
+      include: [{ model: TechProductName, as: 'specification' }],
     });
     res.json(techProducts);
   } catch (err) {
@@ -26,7 +26,9 @@ exports.getTechProducts = async (req, res) => {
 exports.getTechProduct = async (req, res) => {
   try {
     const techProduct = await TechProduct.findByPk(req.params.id, {
-      include: [TechProductName],
+      include: [
+        { model: TechProductName, as: 'specification' }
+        ],
     });
     if (!techProduct)
       return res.status(404).json({ error: "TechProduct not found" });
