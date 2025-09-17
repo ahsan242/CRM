@@ -18,6 +18,8 @@ module.exports = (sequelize) => {
       productSource: { type: DataTypes.STRING(99) },
       userId: { type: DataTypes.TEXT },
       title: { type: DataTypes.TEXT },
+       price: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 }, // Added price field
+      quantity: { type: DataTypes.INTEGER, defaultValue: 0 }, // Added quantity field
       brandId: { type: DataTypes.INTEGER, allowNull: true }, // Ensure this exists
       categoryId: { type: DataTypes.INTEGER, allowNull: true },
       subCategoryId: { type: DataTypes.INTEGER, allowNull: true },
