@@ -1,4 +1,5 @@
 
+// src/models/Product.js
 const { DataTypes } = require("sequelize");
 
 module.exports = (sequelize) => {
@@ -6,21 +7,21 @@ module.exports = (sequelize) => {
     "Product",
     {
       id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
-      sku: { type: DataTypes.STRING(99), allowNull: false },
-      mfr: { type: DataTypes.STRING(99) },
-      techPartNo: { type: DataTypes.STRING(99) },
-      shortDescp: { type: DataTypes.TEXT },
-      longDescp: { type: DataTypes.TEXT },
-      mainImage: { type: DataTypes.STRING(299) },
-      metaTitle: { type: DataTypes.STRING(255) },
-      metaDescp: { type: DataTypes.TEXT },
-      ucpCode: { type: DataTypes.STRING(99) },
-      productSource: { type: DataTypes.STRING(99) },
-      userId: { type: DataTypes.TEXT },
-      title: { type: DataTypes.TEXT },
-       price: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 }, // Added price field
-      quantity: { type: DataTypes.INTEGER, defaultValue: 0 }, // Added quantity field
-      brandId: { type: DataTypes.INTEGER, allowNull: true }, // Ensure this exists
+      sku: { type: DataTypes.STRING(99), allowNull: true },
+      mfr: { type: DataTypes.STRING(99), allowNull: true },
+      techPartNo: { type: DataTypes.STRING(99), allowNull: true },
+      shortDescp: { type: DataTypes.TEXT, allowNull: true },
+      longDescp: { type: DataTypes.TEXT, allowNull: true },
+      mainImage: { type: DataTypes.STRING(299), allowNull: true },
+      metaTitle: { type: DataTypes.STRING(255), allowNull: true },
+      metaDescp: { type: DataTypes.TEXT, allowNull: true },
+      ucpCode: { type: DataTypes.STRING(99), allowNull: true },
+      productSource: { type: DataTypes.STRING(99), allowNull: true },
+      userId: { type: DataTypes.TEXT, allowNull: true },
+      title: { type: DataTypes.TEXT, allowNull: true },
+      price: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00, allowNull: true },
+      quantity: { type: DataTypes.INTEGER, defaultValue: 0, allowNull: true },
+      brandId: { type: DataTypes.INTEGER, allowNull: true },
       categoryId: { type: DataTypes.INTEGER, allowNull: true },
       subCategoryId: { type: DataTypes.INTEGER, allowNull: true },
     },
@@ -31,12 +32,11 @@ module.exports = (sequelize) => {
   );
 
   Product.associate = (models) => {
-    Product.belongsTo(models.Brand, { foreignKey: "brandId" , as: "brand" });
-    Product.belongsTo(models.Category, { foreignKey: "categoryId" ,   as: "category" });
+    Product.belongsTo(models.Brand, { foreignKey: "brandId", as: "brand" });
+    Product.belongsTo(models.Category, { foreignKey: "categoryId", as: "category" });
     Product.belongsTo(models.SubCategory, { foreignKey: "subCategoryId", as: "subCategory" });
-// Product.hasMany(models.Image, { foreignKey: "productId", as: "images" });
-    Product.hasMany(models.Image, { foreignKey: "productId" , as: "images" });
-    Product.hasMany(models.TechProduct, { foreignKey: "productId" , as: "techProducts" });
+    Product.hasMany(models.Image, { foreignKey: "productId", as: "images" });
+    Product.hasMany(models.TechProduct, { foreignKey: "productId", as: "techProducts" });
   };
 
   return Product;

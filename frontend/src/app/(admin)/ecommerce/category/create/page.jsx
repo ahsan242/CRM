@@ -1,24 +1,4 @@
-// import { Card, CardBody, Col, Row } from 'react-bootstrap';
-// import PageBreadcrumb from '@/components/layout/PageBreadcrumb';
-// import CreateCategoryForms from './components/CreateCategoryForms';
-// import PageMetaData from '@/components/PageTitle';
-// const CreateCategory = () => {
-//   return <>
-//       <PageBreadcrumb title="Create Category" subName="Ecommerce" />
-//       <PageMetaData title="Create Category" />
 
-//       <Row>
-//         <Col>
-//           <Card>
-//             <CardBody>
-//               <CreateCategoryForms />
-//             </CardBody>
-//           </Card>
-//         </Col>
-//       </Row>
-//     </>;
-// };
-// export default CreateCategory;
 
 import { useState } from 'react';
 import { Card, CardBody, Col, Row, Button, ButtonGroup } from 'react-bootstrap';

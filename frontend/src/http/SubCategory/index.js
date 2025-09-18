@@ -1,12 +1,3 @@
-// import api from "../api";
-// // ================== ✅ SUB-CATEGORY ROUTES ==================
-// export const createSubCategory = (data) => api.post("/api/sub-categories", data);
-// export const getSubCategories = () => api.get("/api/sub-categories");
-// export const getSubCategory = (id) => api.get(`/api/sub-categories/${id}`);
-// export const updateSubCategory = (id, data) => api.put(`/api/sub-categories/${id}`, data);
-// export const deleteSubCategory = (id) => api.delete(`/api/sub-categories/${id}`);
-
-// export default api;
 
 // src/helpers/data.js
 import api from "../api";

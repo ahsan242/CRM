@@ -1,79 +1,101 @@
-import api from "../api";
 
-// Product-related API functions
-export const createProduct = (data) => {
-  const formData = new FormData();
-  console.log('Creating product with data:', data);
-  // Append all text fields
-  Object.keys(data).forEach(key => {
-    if (key !== 'mainImage' && key !== 'detailImages') {
-      formData.append(key, data[key]);
-    }
-  });
-  
-  // Append main image
-  if (data.mainImage && data.mainImage instanceof File) {
-    formData.append('mainImage', data.mainImage);
+// src/http/Product.js
+import axios from 'axios';
+
+const API_BASE_URL = 'http://localhost:5000'; // Your backend URL
+
+// Create axios instance with default config
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 30000, // 30 seconds timeout
+});
+
+// Add response interceptor for better error handling
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    console.error('API Error:', error.response?.data || error.message);
+    return Promise.reject(error);
   }
-  
-  // Append detail images
-  if (data.detailImages && Array.isArray(data.detailImages)) {
-    data.detailImages.forEach((image, index) => {
-      if (image instanceof File) {
-        formData.append('detailImages', image);
-      }
+);
+
+export const importProductFromIcecat = async (data) => {
+  try {
+    const response = await api.post('/api/products/import', data);
+    return response.data;
+  } catch (error) {
+    // Extract meaningful error message
+    const errorMessage = error.response?.data?.error || 
+                         error.response?.data?.message || 
+                         error.message || 
+                         'Failed to import product';
+    throw new Error(errorMessage);
+  }
+};
+
+export const getImportedProducts = async () => {
+  try {
+    const response = await api.get('/api/products/imports');
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const createProduct = async (formData) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/products`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
     });
+    return response.data;
+  } catch (error) {
+    throw error;
   }
-  console.log('Form Data Entries:', Array.from(formData));
-  return api.post("/api/products", formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
 };
 
-export const getProducts = (params = {}) => {
-  const queryString = new URLSearchParams(params).toString();
-  return api.get(`/api/products?${queryString}`);
+export const getProducts = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/products`);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 };
 
-export const getProduct = (id) => api.get(`/api/products/${id}`);
-
-export const updateProduct = (id, data) => {
-  const formData = new FormData();
-  
-  // Append all text fields
-  Object.keys(data).forEach(key => {
-    if (key !== 'mainImage' && key !== 'detailImages') {
-      formData.append(key, data[key]);
-    }
-  });
-  
-  // Append main image
-  if (data.mainImage && data.mainImage instanceof File) {
-    formData.append('mainImage', data.mainImage);
+export const getProduct = async (id) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/products/${id}`);
+    return response.data;
+  } catch (error) {
+    throw error;
   }
-  
-  // Append detail images
-  if (data.detailImages && Array.isArray(data.detailImages)) {
-    data.detailImages.forEach((image, index) => {
-      if (image instanceof File) {
-        formData.append('detailImages', image);
-      }
-    });
-  }
-  
-  return api.put(`/api/products/${id}`, formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
 };
 
-export const deleteProduct = (id) => api.delete(`/api/products/${id}`);
+export const updateProduct = async (id, data) => {
+  try {
+    const response = await axios.put(`${API_BASE_URL}/api/products/${id}`, data);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
 
-// Category-related functions (if they're in the same file)
-export const getAllProductCategories = () => api.get("/api/categories");
+export const deleteProduct = async (id) => {
+  try {
+    const response = await axios.delete(`${API_BASE_URL}/api/products/${id}`);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
 
-// If categories are in a separate file, you might need to import them differently
-// export { getAllProductCategories } from './categories';
+export const getAllProductCategories = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/categories`);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};

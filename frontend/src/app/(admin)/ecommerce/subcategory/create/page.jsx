@@ -1,24 +1,3 @@
-// import { Card, CardBody, Col, Row } from 'react-bootstrap';
-// import PageBreadcrumb from '@/components/layout/PageBreadcrumb';
-// import CreateSubCategoryForms from './components/CreateSubCategoryForms';
-// import PageMetaData from '@/components/PageTitle';
-// const CreateSubCategory = () => {
-//   return <>
-//       <PageBreadcrumb title="Create SubCategory" subName="Ecommerce" />
-//       <PageMetaData title="Create SubCategory" />
-
-//       <Row>
-//         <Col>
-//           <Card>
-//             <CardBody>
-//               <CreateSubCategoryForms />
-//             </CardBody>
-//           </Card>
-//         </Col>
-//       </Row>
-//     </>;
-// };
-// export default CreateSubCategory;
 
 import { useState } from 'react';
 import { Card, CardBody, Col, Row, Button, ButtonGroup } from 'react-bootstrap';
