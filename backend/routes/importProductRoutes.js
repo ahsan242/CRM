@@ -5,7 +5,6 @@ const router = express.Router();
 const {
   importProduct,
   getimportsProducts,
-,
 } = require('../controllers/importController');
 
 router.post('/', importProduct); 

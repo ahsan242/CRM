@@ -366,7 +366,7 @@ exports.createProduct = async (req, res) => {
           longDescp: req.body.longDescp || null,
           metaTitle: req.body.metaTitle || null,
           metaDescp: req.body.metaDescp || null,
-          ucpCode: req.body.ucpCode || null,
+          upcCode: req.body.upcCode || null,
           productSource: req.body.productSource || null,
           userId: req.body.userId || null,
           title: req.body.title || null,

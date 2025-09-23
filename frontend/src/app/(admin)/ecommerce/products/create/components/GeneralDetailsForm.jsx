@@ -22,7 +22,7 @@ const generalFormSchema = yup.object({
   longDescp: yup.string().nullable(),
   metaTitle: yup.string().nullable(),
   metaDescp: yup.string().nullable(),
-  ucpCode: yup.string().nullable(),
+  upcCode: yup.string().nullable(),
   productSource: yup.string().nullable(),
   userId: yup.string().nullable(),
   title: yup.string().required('Title is required'),
@@ -192,7 +192,7 @@ const GeneralDetailsForm = ({ onProductCreated, importedData }) => {
       longDescp: '',
       metaTitle: '',
       metaDescp: '',
-      ucpCode: '',
+      upcCode: '',
       productSource: '',
       userId: '',
       title: '',
@@ -284,7 +284,7 @@ const GeneralDetailsForm = ({ onProductCreated, importedData }) => {
           <TextFormInput control={control} name="techPartNo" placeholder="Enter techPartNo" label="Tech Part Number" containerClassName="mb-3" />
         </Col>
         <Col lg={6}>
-          <TextFormInput control={control} name="ucpCode" placeholder="Enter Ucp Code" label="Ucp Code" containerClassName="mb-3" />
+          <TextFormInput control={control} name="upcCode" placeholder="Enter Ucp Code" label="Ucp Code" containerClassName="mb-3" />
         </Col>
         <Col lg={6}>
           <TextFormInput control={control} name="userId" placeholder="Enter User ID" label="User ID" containerClassName="mb-3" />

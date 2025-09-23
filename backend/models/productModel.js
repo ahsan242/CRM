@@ -15,7 +15,7 @@ module.exports = (sequelize) => {
       mainImage: { type: DataTypes.STRING(299), allowNull: true },
       metaTitle: { type: DataTypes.STRING(255), allowNull: true },
       metaDescp: { type: DataTypes.TEXT, allowNull: true },
-      ucpCode: { type: DataTypes.STRING(99), allowNull: true },
+      upcCode: { type: DataTypes.STRING(99), allowNull: true },
       productSource: { type: DataTypes.STRING(99), allowNull: true },
       userId: { type: DataTypes.TEXT, allowNull: true },
       title: { type: DataTypes.TEXT, allowNull: true },
