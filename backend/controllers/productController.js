@@ -1,5 +1,3 @@
-
-// src/controllers/productController.js
 const db = require('../config/db');
 const Product = db.Product;
 const Brand = db.Brand;
@@ -8,6 +6,8 @@ const SubCategory = db.SubCategory;
 const Image = db.Image;
 const TechProduct = db.TechProduct;
 const TechProductName = db.TechProductName;
+const ProductDocument = db.ProductDocument; // ✅ Add this
+const ProductBulletPoint = db.ProductBulletPoint; // ✅ Add this
 const axios = require("axios");
 const multer = require('multer');
 const path = require('path');
@@ -40,6 +40,61 @@ const uploadFiles = upload.fields([
   { name: 'mainImage', maxCount: 1 },
   { name: 'detailImages', maxCount: 10 }
 ]);
+
+// 📌 NEW HELPER FUNCTIONS - Define them in this file
+// Helper function: Extract and save PDF documents from Multimedia
+const processProductDocuments = async (multimediaData, productId) => {
+  try {
+    if (!multimediaData || !Array.isArray(multimediaData)) {
+      console.log("❌ No multimedia data found or invalid format");
+      return;
+    }
+
+    for (const media of multimediaData) {
+      // Only process PDF documents
+      if (media.ContentType === 'application/pdf' && media.URL) {
+        await ProductDocument.create({
+          documentUrl: media.URL,
+          contentType: media.ContentType,
+          documentType: media.Type || 'document',
+          description: media.Description || `Product Document`,
+          productId: productId
+        });
+        console.log(`✅ PDF document saved: ${media.URL}`);
+      }
+    }
+  } catch (error) {
+    console.error("❌ Error processing product documents:", error);
+  }
+};
+
+// Helper function: Extract and save bullet points from GeneratedBulletPoints
+const processBulletPoints = async (bulletPointsData, productId) => {
+  try {
+    if (!bulletPointsData || !bulletPointsData.Values || !Array.isArray(bulletPointsData.Values)) {
+      console.log("❌ No bullet points data found or invalid format");
+      return;
+    }
+
+    // Clear existing bullet points for this product
+    await ProductBulletPoint.destroy({ where: { productId } });
+
+    // Process each bullet point value
+    for (const [index, bulletPoint] of bulletPointsData.Values.entries()) {
+      if (bulletPoint && typeof bulletPoint === 'string') {
+        await ProductBulletPoint.create({
+          point: bulletPoint.trim(),
+          orderIndex: index,
+          productId: productId
+        });
+      }
+    }
+    
+    console.log(`✅ ${bulletPointsData.Values.length} bullet points saved for product ID: ${productId}`);
+  } catch (error) {
+    console.error("❌ Error processing bullet points:", error);
+  }
+};
 
 // Helper functions for Icecat data conversion
 const convertIcecatValueToString = (value) => {
@@ -141,178 +196,321 @@ const findOrCreateTechSpec = async (specName) => {
   return spec.id;
 };
 
-exports.importProduct = async (req, res) => {
-  console.log('Import product request received:', req.body);
-  
+// 📌 Helper function: Extract UPC from Icecat response
+const extractUPC = (icecatData) => {
   try {
-    // Validate required fields
-    const { productCode, brand, category } = req.body;
+    const generalInfo = icecatData.data?.GeneralInfo;
     
+    // Method 1: Direct UPC field
+    if (generalInfo?.UPC) {
+      return generalInfo.UPC;
+    }
+
+    // Method 3: Check GTIN if it's 12 digits (UPC length)
+    if (generalInfo?.GTIN && generalInfo.GTIN.length === 12) {
+      return generalInfo.GTIN;
+    }
+
+    console.log("📦 Extracted UPC:", generalInfo?.UPC || "Not found");
+    return generalInfo?.UPC || null;
+
+  } catch (error) {
+    console.error("❌ Error extracting UPC:", error);
+    return null;
+  }
+};
+
+// 📌 Helper function: Check if product already exists
+const findExistingProduct = async (productCode, brandId, upc, icecatData) => {
+  try {
+    // Check by SKU and brand combination (most reliable)
+    const productBySku = await Product.findOne({
+      where: { 
+        sku: productCode,
+        brandId: brandId
+      }
+    });
+    
+    if (productBySku) {
+      console.log(`✅ Found existing product by SKU: ${productCode} and brandId: ${brandId}`);
+      return productBySku;
+    }
+
+    // Check by UPC if available
+    if (upc && upc !== "Null") {
+      const productByUpc = await Product.findOne({
+        where: { upcCode: upc }
+      });
+      
+      if (productByUpc) {
+        console.log(`✅ Found existing product by UPC: ${upc}`);
+        return productByUpc;
+      }
+    }
+
+    // Check by title and brand (fallback)
+    const generalInfo = icecatData?.data?.GeneralInfo;
+    const productTitle = generalInfo?.ProductName || generalInfo?.Title;
+    
+    if (productTitle) {
+      const productByTitle = await Product.findOne({
+        where: { 
+          title: productTitle,
+          brandId: brandId
+        }
+      });
+      
+      if (productByTitle) {
+        console.log(`✅ Found existing product by title: ${productTitle} and brandId: ${brandId}`);
+        return productByTitle;
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error("❌ Error finding existing product:", error);
+    return null;
+  }
+};
+
+// 📌 Helper function: Update existing product
+const updateExistingProduct = async (existingProduct, productData, newMainImage) => {
+  try {
+    // Preserve the existing main image if no new one is provided
+    if (!newMainImage) {
+      productData.mainImage = existingProduct.mainImage;
+    }
+
+    // Update the product
+    await Product.update(productData, {
+      where: { id: existingProduct.id }
+    });
+
+    console.log(`✅ Updated existing product ID: ${existingProduct.id}`);
+    return await Product.findByPk(existingProduct.id);
+  } catch (error) {
+    console.error("❌ Error updating existing product:", error);
+    throw error;
+  }
+};
+
+// 📌 Helper function: Clean up old images and tech specs
+const cleanupProductAssets = async (productId) => {
+  try {
+    // Delete existing images
+    await Image.destroy({ where: { productId } });
+    console.log(`✅ Cleared existing images for product ID: ${productId}`);
+
+    // Delete existing tech specs
+    await TechProduct.destroy({ where: { productId } });
+    console.log(`✅ Cleared existing tech specs for product ID: ${productId}`);
+
+    // Delete existing documents
+    await ProductDocument.destroy({ where: { productId } });
+    console.log(`✅ Cleared existing documents for product ID: ${productId}`);
+
+    // Delete existing bullet points
+    await ProductBulletPoint.destroy({ where: { productId } });
+    console.log(`✅ Cleared existing bullet points for product ID: ${productId}`);
+
+    return true;
+  } catch (error) {
+    console.error("❌ Error cleaning up product assets:", error);
+    return false;
+  }
+};
+
+// 📌 Main import function
+exports.importProduct = async (req, res) => {
+  console.log("Import product request received:", req.body);
+
+  try {
+    const { productCode, brand } = req.body;
+
     if (!productCode || !brand) {
-      return res.status(400).json({ 
-        error: 'Product code and brand are required' 
+      return res.status(400).json({
+        error: "Product code and brand are required",
       });
     }
 
-    // Call Icecat API
     const response = await axios.get("https://live.icecat.biz/api/", {
       params: {
         shopname: "vcloudchoice",
         lang: "en",
         Brand: brand,
         ProductCode: productCode,
-        app_key: "HhFakMaKzZsHF3fb6O_VUXzMNoky7Xpf"
-      }
+        app_key: "HhFakMaKzZsHF3fb6O_VUXzMNoky7Xpf",
+      },
     });
 
-    const icecatData = response.data;
-    console.log("Icecat data received for:", icecatData.data?.GeneralInfo?.Title);
+    // Extract UPC only
+    const upc = extractUPC(response.data);
 
-    if (!icecatData.data) {
-      return res.status(404).json({ error: 'Product not found in Icecat database' });
+    // Ensure brand exists
+    let brandRecord = await Brand.findOne({ where: { title: brand } });
+    if (!brandRecord) {
+      brandRecord = await Brand.create({ title: brand });
     }
 
-    // Process and save product data
-    const generalInfo = icecatData.data.GeneralInfo;
-    const productFamily = icecatData.data.ProductFamily;
-    
-    // Debug logging to see what Icecat returns
-    console.log('Icecat shortDescp:', generalInfo?.ProductDescription?.ShortDesc);
-    console.log('Icecat longDescp:', generalInfo?.ProductDescription?.LongDesc);
-    console.log('Icecat SummaryDescription:', generalInfo?.SummaryDescription);
-    console.log('Type of shortDescp:', typeof generalInfo?.ProductDescription?.ShortDesc);
-    console.log('Type of longDescp:', typeof generalInfo?.ProductDescription?.LongDesc);
+    // ✅ CHECK FOR EXISTING PRODUCT
+    const existingProduct = await findExistingProduct(productCode, brandRecord.id, upc, response.data);
+    let isUpdate = false;
+    let product;
 
-    // Find or create brand
-    const brandId = await findOrCreateBrand(brand);
+    const ImageUrl = response.data.data?.Image;
+    const mainImageUrl = ImageUrl?.HighPic || ImageUrl?.Pic500x500?.LowPic;
     
-    // Find or create category
-    const categoryName = productFamily?.Name || category || 'Uncategorized';
-    const categoryId = await findOrCreateCategory(categoryName);
+    let mainImageFilename = null;
 
-    // Prepare product data with proper conversion
+    if (mainImageUrl) {
+      const timestamp = Date.now();
+      const imageExt = path.extname(mainImageUrl) || ".jpg";
+      mainImageFilename = `icecat_${productCode}_main_${timestamp}${imageExt}`;
+      await downloadImage(mainImageUrl, mainImageFilename);
+    }
+
+    const Category = response.data.data?.GeneralInfo?.Category?.Name?.Value;
+    let SubCategory = await SubCategorys.findOne({ where: { title: Category } });
+    if (!SubCategory) {
+      SubCategory = await SubCategorys.create({ title: Category || 'Uncategorized', parentId: 1 });
+    }
+    
+    const generalInfo = response.data.data?.GeneralInfo;
+
     const productData = {
       sku: productCode,
-      mfr: generalInfo?.Model || null,
-      techPartNo: productCode,
-      shortDescp: convertIcecatValueToString(generalInfo?.ProductDescription?.ShortDesc || generalInfo?.SummaryDescription || ''),
-      longDescp: convertIcecatValueToString(generalInfo?.ProductDescription?.LongDesc || generalInfo?.SummaryDescription || ''),
-      metaTitle: convertIcecatValueToString(generalInfo?.Title || `${brand} ${productCode}`),
-      metaDescp: convertIcecatValueToString(generalInfo?.ProductDescription?.ShortDesc || ''),
-      title: convertIcecatValueToString(generalInfo?.Title || `${brand} ${productCode}`),
-      price: 0.00,
-      quantity: 0,
-      brandId: brandId,
-      categoryId: categoryId,
-      productSource: 'icecat'
+      mfr: productCode,
+      techPartNo: null,
+      shortDescp: generalInfo?.Title || null,
+      longDescp: generalInfo?.Description?.LongDesc || null,
+      metaTitle: generalInfo?.Title || null,
+      metaDescp: generalInfo?.Description?.LongDesc || null,
+      upcCode: upc || "Null",
+      productSource: "icecat",
+      userId: 1,
+      mainImage: mainImageFilename || null,
+      title: generalInfo?.ProductName || generalInfo?.Title || productCode,
+      price: req.body.price ? parseFloat(req.body.price) : 0.0,
+      quantity: req.body.quantity ? parseInt(req.body.quantity) : 0,
+      brandId: brandRecord.id,
+      categoryId: 1,
+      subCategoryId: SubCategory.id,
     };
 
-    // Create the product
-    const product = await Product.create(productData);
+    if (existingProduct) {
+      // ✅ UPDATE EXISTING PRODUCT
+      isUpdate = true;
+      
+      // Clean up old assets
+      await cleanupProductAssets(existingProduct.id);
+      
+      // Update the product
+      product = await updateExistingProduct(existingProduct, productData, mainImageFilename);
+      console.log(`🔄 Updated existing product: ${product.title}`);
+    } else {
+      // ✅ CREATE NEW PRODUCT
+      product = await Product.create(productData);
+      console.log(`🆕 Created new product: ${product.title}`);
+    }
 
-    // Download and save main image
-    if (generalInfo?.ProductImage && generalInfo.ProductImage.HighImg) {
-      try {
-        const imageUrl = generalInfo.ProductImage.HighImg;
-        const imageExt = path.extname(imageUrl) || '.jpg';
-        const imageFilename = `icecat_${product.id}_main${imageExt}`;
+    // ✅ PROCESS PDF DOCUMENTS FROM MULTIMEDIA
+    const multimediaData = response.data.data?.Multimedia;
+    if (multimediaData) {
+      await processProductDocuments(multimediaData, product.id);
+    }
+
+    // ✅ PROCESS BULLET POINTS FROM GeneratedBulletPoints
+    const generatedBulletPoints = response.data.data?.GeneratedBulletPoints;
+    if (generatedBulletPoints) {
+      await processBulletPoints(generatedBulletPoints, product.id);
+    }
+    
+    // Process gallery images
+    const gallery = response.data.data?.Gallery;
+    if (gallery && Array.isArray(gallery)) {
+      for (const [index, img] of gallery.entries()) {
+        const imgUrl = img.Pic500x500 || img.Pic || img.LowPic;
+        if (!imgUrl) continue;
         
-        const downloadedFilename = await downloadImage(imageUrl, imageFilename);
+        const timestamp = Date.now();
+        const imageExt = path.extname(imgUrl) || ".jpg";
+        const galleryImageFilename = `icecat_${productCode}_gallery_${index}_${timestamp}${imageExt}`;
+
+        const downloadedFilename = await downloadImage(imgUrl, galleryImageFilename);
         
         if (downloadedFilename) {
-          await product.update({ mainImage: downloadedFilename });
-          
-          // Also create an image record
           await Image.create({
-            imageTitle: `${brand} ${productCode} Main Image`,
-            url: downloadedFilename,
-            productId: product.id
+            imageTitle: `Image ${index + 1}`,
+            url: galleryImageFilename,
+            productId: product.id,
           });
-        }
-      } catch (imageError) {
-        console.error('Error downloading main image:', imageError);
-      }
-    }
-
-    // Process and save technical specifications
-    if (icecatData.data.Specs) {
-      for (const [specId, specData] of Object.entries(icecatData.data.Specs)) {
-        if (specData.Value && specData.Name && specData.Value._value) {
-          try {
-            const specNameId = await findOrCreateTechSpec(specData.Name._value);
-            
-            if (specNameId) {
-              await TechProduct.create({
-                productId: product.id,
-                specId: specNameId,
-                value: specData.Value._value
-              });
-            }
-          } catch (specError) {
-            console.error('Error saving tech spec:', specError);
-          }
+          console.log(`✅ Image ${index + 1} associated with product`);
         }
       }
     }
 
-    // Download additional images
-    if (icecatData.data.GalleryInfo && icecatData.data.GalleryInfo.Image) {
-      const images = Array.isArray(icecatData.data.GalleryInfo.Image) 
-        ? icecatData.data.GalleryInfo.Image 
-        : [icecatData.data.GalleryInfo.Image];
+    // Process technical specifications
+    try {
+      const featuresGroups = response.data.data?.FeaturesGroups;
       
-      for (const [index, imageInfo] of images.entries()) {
-        if (imageInfo.HighImg) {
-          try {
-            const imageUrl = imageInfo.HighImg;
-            const imageExt = path.extname(imageUrl) || '.jpg';
-            const imageFilename = `icecat_${product.id}_${index}${imageExt}`;
+      if (featuresGroups) {
+        for (const group of featuresGroups) {
+          let techSpecGroup = await TechSpecGroup.findOne({
+            where: { title: group.FeatureGroup?.Name?.Value }
+          });
+          
+          if (!techSpecGroup) {
+            techSpecGroup = await TechSpecGroup.create({
+              title: group.FeatureGroup?.Name?.Value || 'General'
+            });
+          }
+          
+          for (const feature of group.Features || []) {
+            let techProductName = await TechProductName.findOne({
+              where: { title: feature.Feature?.Name?.Value }
+            });
             
-            const downloadedFilename = await downloadImage(imageUrl, imageFilename);
-            
-            if (downloadedFilename) {
-              await Image.create({
-                imageTitle: `${brand} ${productCode} Image ${index + 1}`,
-                url: downloadedFilename,
-                productId: product.id
+            if (!techProductName) {
+              techProductName = await TechProductName.create({
+                title: feature.Feature?.Name?.Value || 'Unknown'
               });
             }
-          } catch (imageError) {
-            console.error('Error downloading additional image:', imageError);
+            
+            await TechProduct.create({
+              specId: techProductName.id,
+              value: feature.PresentationValue || feature.RawValue || feature.Value || '',
+              techspecgroupId: techSpecGroup.id,
+              productId: product.id
+            });
           }
         }
       }
+      
+      console.log(`✅ Successfully processed tech specs for product ID: ${product.id}`);
+      
+    } catch (error) {
+      console.error('❌ Error processing Icecat data:', error);
     }
-
-    // Get the complete product with all relations
-    const completeProduct = await Product.findByPk(product.id, {
-      include: [
-        { model: Brand, as: 'brand' },
-        { model: Category, as: 'category' },
-        { model: SubCategory, as: 'subCategory' },
-        { model: Image, as: 'images' },
-        { 
-          model: TechProduct, 
-          as: 'techProducts',
-          include: [{ model: TechProductName, as: 'specification' }]
-        }
-      ],
-    });
 
     res.status(201).json({
-      message: 'Product imported successfully',
-      product: completeProduct
+      message: isUpdate ? "Product updated successfully" : "Product imported successfully",
+      action: isUpdate ? "updated" : "created",
+      product: {
+        id: product.id,
+        title: product.title,
+        sku: product.sku,
+        upc: product.upcCode,
+        brand: brandRecord.title,
+        existingProductUpdated: isUpdate,
+        documentsCount: multimediaData ? multimediaData.length : 0,
+        bulletPointsCount: generatedBulletPoints ? generatedBulletPoints.Values.length : 0
+      },
     });
-    
   } catch (error) {
-    console.error("❌ Error in importProduct:", error.response?.data || error.message);
-    
-    if (error.response?.status === 404) {
-      return res.status(404).json({
-        error: 'Product not found in Icecat database'
-      });
-    }
-    
+    console.error(
+      "❌ Error importing/updating product:",
+      error.response?.data || error.message
+    );
     res.status(500).json({
       error: error.response?.data?.message || error.message || 'Internal server error during import'
     });
@@ -463,7 +661,12 @@ exports.getProduct = async (req, res) => {
         { model: Brand, as: 'brand' },
         { model: Category, as: 'category' },
         { model: SubCategory, as: 'subCategory' },
-        { model: Image, as: 'images' }
+        { model: Image, as: 'images' },
+        //...... new lines recently added ......//
+        // { model: TechProduct, as: "techProducts" },
+        // ✅ ADD THESE NEW INCLUDES
+        { model: db.ProductDocument, as: "documents" },
+        { model: db.ProductBulletPoint, as: "bulletPoints", order: [['orderIndex', 'ASC']] }
       ],
     });
     if (!product) return res.status(404).json({ error: 'Product not found' });

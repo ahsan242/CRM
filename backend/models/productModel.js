@@ -14,6 +14,8 @@ module.exports = (sequelize) => {
       longDescp: { type: DataTypes.TEXT, allowNull: true },
       mainImage: { type: DataTypes.STRING(299), allowNull: true },
       metaTitle: { type: DataTypes.STRING(255), allowNull: true },
+      bulletsPoint: { type: DataTypes.TEXT, allowNull: true },
+      multimediaUrl: { type: DataTypes.TEXT, allowNull: true },
       metaDescp: { type: DataTypes.TEXT, allowNull: true },
       upcCode: { type: DataTypes.STRING(99), allowNull: true },
       productSource: { type: DataTypes.STRING(99), allowNull: true },
@@ -24,6 +26,7 @@ module.exports = (sequelize) => {
       brandId: { type: DataTypes.INTEGER, allowNull: true },
       categoryId: { type: DataTypes.INTEGER, allowNull: true },
       subCategoryId: { type: DataTypes.INTEGER, allowNull: true },
+      endOfLifeDate: { type: DataTypes.DATE, allowNull: true }, // ✅ NEW FIELD
     },
     {
       tableName: "products",
@@ -37,7 +40,10 @@ module.exports = (sequelize) => {
     Product.belongsTo(models.SubCategory, { foreignKey: "subCategoryId", as: "subCategory" });
     Product.hasMany(models.Image, { foreignKey: "productId", as: "images" });
     Product.hasMany(models.TechProduct, { foreignKey: "productId", as: "techProducts" });
+      // ✅ ADD THESE NEW ASSOCIATIONS
+  Product.hasMany(models.ProductDocument, { foreignKey: "productId", as: "documents" });
   };
+  // Product.hasMany(models.ProductDocument, { foreignKey: "productId",  as: "documents"  });
 
   return Product;
 };

@@ -32,6 +32,7 @@ const columns = [{
         </div>
       </div>
 }, {
+  // idr s frontend pr product show ho re hen 
   header: 'Category',
   accessorKey: 'category.name'
 }, {
