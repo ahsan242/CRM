@@ -1,4 +1,3 @@
-
 // src/app/(admin)/ecommerce/products/create/components/EditProductForm.jsx
 import { useState, useEffect } from 'react';
 import { Col, Row, Alert } from 'react-bootstrap';
@@ -8,7 +7,7 @@ import * as yup from 'yup';
 import IconifyIcon from '@/components/wrappers/IconifyIcon';
 import TextFormInput from '@/components/form/TextFormInput';
 import TextAreaFormInput from '@/components/form/TextAreaFormInput';
-import { getProduct, updateProduct } from '@/http/Product';
+import { updateProduct } from '@/http/Product';
 
 const productFormSchema = yup.object({
   title: yup.string().required('Product title is required'),
@@ -20,49 +19,33 @@ const productFormSchema = yup.object({
   metaDescp: yup.string().optional(),
 });
 
-const EditProductForm = ({ productId, onSuccess }) => {
+const EditProductForm = ({ product, onSuccess }) => {
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
 
   const { control, handleSubmit, setValue } = useForm({
     resolver: yupResolver(productFormSchema)
   });
 
   useEffect(() => {
-    const fetchProduct = async () => {
-      try {
-        setLoading(true);
-        const response = await getProduct(productId);
-        const product = response.data;
-        
-        setValue('title', product.title);
-        setValue('sku', product.sku);
-        setValue('price', product.price);
-        setValue('quantity', product.quantity);
-        setValue('shortDescp', product.shortDescp);
-        setValue('longDescp', product.longDescp);
-        setValue('metaDescp', product.metaDescp);
-        
-      } catch (err) {
-        setError(err.response?.data?.error || 'Failed to fetch product details');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (productId) {
-      fetchProduct();
+    if (product) {
+      setValue('title', product.title || '');
+      setValue('sku', product.sku || '');
+      setValue('price', product.price || 0);
+      setValue('quantity', product.quantity || 0);
+      setValue('shortDescp', product.shortDescp || '');
+      setValue('longDescp', product.longDescp || '');
+      setValue('metaDescp', product.metaDescp || '');
     }
-  }, [productId, setValue]);
+  }, [product, setValue]);
 
   const onSubmit = async (data) => {
     setIsSubmitting(true);
     setError(null);
     
     try {
-      await updateProduct(productId, data);
+      await updateProduct(product.id, data);
       
       setShowSuccessAlert(true);
       
@@ -78,8 +61,8 @@ const EditProductForm = ({ productId, onSuccess }) => {
     }
   };
 
-  if (loading) {
-    return <div className="text-center py-4">Loading product details...</div>;
+  if (!product) {
+    return <div className="text-center py-4">No product data available.</div>;
   }
 
   return (

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import ReactTable from '@/components/Table';
 import IconifyIcon from '@/components/wrappers/IconifyIcon';
 import { getProducts, deleteProduct } from '@/http/Product';
-import EditProductForm from './EditProductForm'; // You'll need to create this
+import EditProductForm from './EditProductForm';
 
 const ProductsListTable = () => {
   const [products, setProducts] = useState([]);
@@ -20,7 +20,9 @@ const ProductsListTable = () => {
     try {
       setLoading(true);
       const response = await getProducts();
-      setProducts(response.data);
+      // Fix: The API returns the array directly, not nested under data
+      setProducts(response || []); // Use response directly instead of response.data
+      console.log('Products fetched:', response);
     } catch (err) {
       setError(err.message || 'Failed to fetch products');
       console.error('Error fetching products:', err);
@@ -61,10 +63,24 @@ const ProductsListTable = () => {
       header: 'Product Name',
       cell: ({
         row: {
-          original: { id, title, description },
+          original: { id, title, shortDescp, mainImage },
         },
       }) => (
         <div className="d-flex align-items-center">
+          <div className="flex-shrink-0 me-3">
+            <Link to={`/ecommerce/products/${id}`}>
+              <img 
+                // src={`http://localhost:5000/${mainImage}`} 
+                src={`http://localhost:5000/uploads/products/${mainImage}`}
+
+                alt={title} 
+                className="img-fluid avatar-sm"
+                onError={(e) => {
+                  e.target.src = '/images/default-product.png'
+                }}
+              />
+            </Link>
+          </div>
           <div className="flex-grow-1">
             <h5 className="mt-0 mb-1">
               <Link to={`/ecommerce/products/${id}`} className="text-reset">
@@ -72,24 +88,42 @@ const ProductsListTable = () => {
               </Link>
             </h5>
             <span className="fs-13 text-truncate d-inline-block" style={{maxWidth: '200px'}}>
-              {description}
+              {shortDescp}
             </span>
           </div>
         </div>
       ),
     },
     {
-      header: 'SKU',
-      accessorKey: 'sku',
+      header: 'Category',
+      accessorKey: 'category.title',
     },
     {
       header: 'Price',
-      accessorKey: 'price',
-      cell: ({ getValue }) => `$${getValue()}`,
+      cell: ({ row: { original: { price } } }) => `$${parseFloat(price || 0).toFixed(2)}`,
     },
     {
-      header: 'Stock',
-      accessorKey: 'quantity',
+      header: 'Inventory',
+      cell: ({
+        row: {
+          original: { quantity },
+        },
+      }) => {
+        const getStockStatus = (qty) => {
+          if (qty > 10) return { variant: 'success', text: 'In Stock' }
+          if (qty > 0) return { variant: 'warning', text: 'Low Stock' }
+          return { variant: 'danger', text: 'Out of Stock' }
+        }
+        
+        const stockStatus = getStockStatus(quantity || 0)
+        return (
+          <div className={'text-' + stockStatus.variant}>
+            <span className={`badge bg-${stockStatus.variant}`}>
+              {stockStatus.text} ({quantity || 0})
+            </span>
+          </div>
+        )
+      },
     },
     {
       header: 'Action',
@@ -124,7 +158,7 @@ const ProductsListTable = () => {
     return <div className="alert alert-danger">Error: {error}</div>;
   }
 
-  if (products.length === 0) {
+  if (!products || products.length === 0) {
     return <div className="alert alert-info">No products found.</div>;
   }
 
@@ -137,7 +171,7 @@ const ProductsListTable = () => {
           </div>
           <div className="card-body">
             <EditProductForm 
-              productId={editingProduct.id} 
+              product={editingProduct}
               onSuccess={handleEditSuccess}
             />
             <div className="d-flex justify-content-end mt-3">

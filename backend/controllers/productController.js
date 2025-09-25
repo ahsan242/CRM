@@ -12,6 +12,11 @@ const axios = require("axios");
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+// ...... new lines recently added ......//
+const ProductImportJob = db.ProductImportJob; // You'll need to create this model
+const ProductImportItem = db.ProductImportItem; // You'll need to create this model
+const { Op } = require('sequelize');
+
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -748,4 +753,131 @@ exports.deleteProduct = async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+};
+
+//.... new code .....
+
+
+// Excel Import Function
+exports.importProductsFromExcel = async (req, res) => {
+  try {
+    const { products } = req.body;
+
+    if (!products || !Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({
+        error: "Products array is required and must not be empty"
+      });
+    }
+
+    // Validate daily limit (300 products)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const todayImports = await ProductImportJob.count({
+      where: {
+        createdAt: {
+          [Op.gte]: today,
+          [Op.lt]: tomorrow
+        }
+      }
+    });
+
+    if (todayImports + products.length > 300) {
+      return res.status(400).json({
+        error: `Daily import limit exceeded. Today's remaining quota: ${300 - todayImports} products`
+      });
+    }
+
+    // Create import job
+    const importJob = await ProductImportJob.create({
+      totalProducts: products.length,
+      processedProducts: 0,
+      successfulImports: 0,
+      failedImports: 0,
+      status: 'scheduled',
+      progress: 0
+    });
+
+    // Create import items
+    const importItems = products.map((product, index) => ({
+      jobId: importJob.id,
+      productCode: product['Product Code'],
+      brand: product.Brand,
+      price: product.Price || 0,
+      quantity: product.Quantity || 0,
+      status: 'pending',
+      orderIndex: index
+    }));
+
+    await ProductImportItem.bulkCreate(importItems);
+
+    // Schedule the import job (you'll implement the cron job separately)
+    scheduleImportJob(importJob.id);
+
+    res.status(201).json({
+      success: true,
+      jobId: importJob.id,
+      message: `Import job scheduled successfully. ${products.length} products will be processed.`
+    });
+
+  } catch (error) {
+    console.error('Error scheduling import job:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to schedule import job'
+    });
+  }
+};
+
+// Get Import Jobs
+exports.getImportJobs = async (req, res) => {
+  try {
+    const jobs = await ProductImportJob.findAll({
+      order: [['createdAt', 'DESC']],
+      limit: 50
+    });
+
+    res.json({
+      success: true,
+      data: jobs
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message || 'Failed to fetch import jobs'
+    });
+  }
+};
+
+// Get Import Job Status
+exports.getImportJobStatus = async (req, res) => {
+  try {
+    const job = await ProductImportJob.findByPk(req.params.jobId, {
+      include: [{
+        model: ProductImportItem,
+        as: 'items'
+      }]
+    });
+
+    if (!job) {
+      return res.status(404).json({
+        error: 'Import job not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: job
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message || 'Failed to fetch job status'
+    });
+  }
+};
+
+// Helper function to schedule import job
+const scheduleImportJob = async (jobId) => {
+  // This will be handled by your cron job system
+  console.log(`Import job ${jobId} scheduled for processing`);
 };
