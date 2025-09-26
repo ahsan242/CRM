@@ -1,37 +1,35 @@
-
-
-// const express = require('express');
-// const router = express.Router();
+const express = require('express');
+const{
+    createProductForImport,
+    bulkCreateProductsForImport,
+    importFromExternalAPI,
+    getAllProductsForImport,
+    getStats,
+    searchProducts,
+    getProductsByStatus,
+    getExactCountByStatus,
+    getProductsByStatusWithFilters,
+    getProductForImportById,
+    updateProductForImport,
+    deleteProductForImport,
+    bulkUpdateStatus,
+} = require("../controllers/productForImportController");
+const router = express.Router();
 // const productForImportController = require('../controllers/productForImportController');
 
-// // CRUD Routes
-// router.post('/', productForImportController.createProductForImport);
-// router.post('/bulk', productForImportController.bulkCreateProductsForImport);
-// router.post('/import-external', productForImportController.importFromExternalAPI); // NEW ROUTE
-// router.get('/', productForImportController.getAllProductsForImport);
-// router.get('/stats', productForImportController.getStats);
-// router.get('/search', productForImportController.searchProducts);
-// router.get('/:id', productForImportController.getProductForImportById);
-// router.put('/:id', productForImportController.updateProductForImport);
-// router.delete('/:id', productForImportController.deleteProductForImport);
-// router.patch('/bulk-status', productForImportController.bulkUpdateStatus);
-
-// module.exports = router;
-
-const express = require('express');
-const router = express.Router();
-const productForImportController = require('../controllers/productForImportController');
-
 // CRUD Routes
-router.post('/', productForImportController.createProductForImport);
-router.post('/bulk', productForImportController.bulkCreateProductsForImport);
-router.post('/import-external', productForImportController.importFromExternalAPI);
-router.get('/', productForImportController.getAllProductsForImport);
-router.get('/stats', productForImportController.getStats);
-router.get('/search', productForImportController.searchProducts);
-router.get('/:id', productForImportController.getProductForImportById);
-router.put('/:id', productForImportController.updateProductForImport);
-router.delete('/:id', productForImportController.deleteProductForImport);
-router.patch('/bulk-status', productForImportController.bulkUpdateStatus);
+router.post('/', createProductForImport);
+router.post('/bulk', bulkCreateProductsForImport);
+router.post('/import-external', importFromExternalAPI);
+router.get('/', getAllProductsForImport);
+router.get('/stats', getStats);
+router.get('/search', searchProducts);
+router.get('/status', getProductsByStatus); // New route
+router.get('/status/exact', getExactCountByStatus); // New route
+router.get('/status/filtered', getProductsByStatusWithFilters); // New route
+router.get('/:id', getProductForImportById);
+router.put('/:id', updateProductForImport);
+router.delete('/:id', deleteProductForImport);
+router.patch('/bulk-status', bulkUpdateStatus);
 
 module.exports = router;

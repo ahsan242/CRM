@@ -61,68 +61,67 @@ const BrandsListTable = () => {
     setEditingBrand(null);
   };
 
-  const columns = [
-    {
-      header: 'Brand Name',
-      cell: ({
-        row: {
-          original: { id, title, short_descp },
-        },
-      }) => (
-        <div className="d-flex align-items-center">
-          <div className="flex-grow-1">
-            <h5 className="mt-0 mb-1">
-              <Link to={`/ecommerce/brands/${id}`} className="text-reset">
-                {title}
-              </Link>
-            </h5>
-            <span className="fs-13 text-truncate d-inline-block" style={{maxWidth: '200px'}}>
-              {short_descp}
-            </span>
-          </div>
+  
+const columns = [
+  {
+    header: 'Brand Name',
+    cell: ({
+      row: {
+        original: { id, title },
+      },
+    }) => (
+      <div className="d-flex align-items-center">
+        <div className="flex-grow-1">
+          <h5 className="mt-0 mb-1">
+            <Link to={`/ecommerce/brands/${id}`} className="text-reset">
+              {title}
+            </Link>
+          </h5>
         </div>
-      ),
-    },
-    {
-      header: 'Short Description',
-      accessorKey: 'short_descp',
-      cell: ({ getValue }) => (
-        <span className="text-truncate d-inline-block" style={{maxWidth: '200px'}}>
-          {getValue()}
-        </span>
-      ),
-    },
-    {
-      header: 'Meta Description',
-      accessorKey: 'meta_descp',
-      cell: ({ getValue }) => (
-        <span className="text-truncate d-inline-block" style={{maxWidth: '200px'}}>
-          {getValue()}
-        </span>
-      ),
-    },
-    {
-      header: 'Action',
-      cell: ({ row: { original } }) => (
-        <>
-          <button 
-            type="button" 
-            className="btn btn-sm btn-soft-secondary me-1"
-            onClick={() => handleEdit(original)}
-          >
-            <IconifyIcon icon="bx:edit" className="fs-18" />
-          </button>
-          <button 
-            type="button" 
-            className="btn btn-sm btn-soft-danger"
-            onClick={() => handleDelete(original.id)}
-          >
-            <IconifyIcon icon="bx:trash" className="fs-18" />
-          </button>
-        </>
-      ),
-    },
-  ];
+      </div>
+    ),
+  },
+  {
+    header: 'Short Description',
+    accessorKey: 'short_descp',
+    cell: ({ getValue }) => (
+      <span className="text-truncate d-inline-block" style={{ maxWidth: '200px' }}>
+        {getValue()}
+      </span>
+    ),
+  },
+  {
+    header: 'Meta Description',
+    accessorKey: 'meta_descp',
+    cell: ({ getValue }) => (
+      <span className="text-truncate d-inline-block" style={{ maxWidth: '200px' }}>
+        {getValue()}
+      </span>
+    ),
+  },
+  {
+    header: 'Action',
+    cell: ({ row: { original } }) => (
+      <>
+        <button
+          type="button"
+          className="btn btn-sm btn-soft-secondary me-1"
+          onClick={() => handleEdit(original)}
+        >
+          <IconifyIcon icon="bx:edit" className="fs-18" />
+        </button>
+        <button
+          type="button"
+          className="btn btn-sm btn-soft-danger"
+          onClick={() => handleDelete(original.id)}
+        >
+          <IconifyIcon icon="bx:trash" className="fs-18" />
+        </button>
+      </>
+    ),
+  },
+];
+
 
   const pageSizeList = [2, 5, 10, 20, 50];
 
