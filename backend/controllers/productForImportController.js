@@ -137,7 +137,7 @@ exports.importFromExternalAPI = async (req, res) => {
         brand: brand,
         distributor: distributor,
         source: 'external_api',
-        status: 'active',
+        // status: 'active',
         lastUpdated: new Date(),
         createdAt: new Date()
       };
