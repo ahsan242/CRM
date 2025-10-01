@@ -831,3 +831,46 @@ exports.getProductsByStatusWithFilters = async (req, res) => {
     });
   }
 };
+
+// Add this to your productForImport controller
+exports.updateProductStatus = async (req, res) => {
+  try {
+    const { sku, brand, status } = req.body;
+
+    if (!sku || !brand || !status) {
+      return res.status(400).json({
+        error: "SKU, Brand, and Status are required"
+      });
+    }
+
+    const product = await ProductForImport.findOne({
+      where: {
+        sku: sku,
+        brand: brand
+      }
+    });
+
+    if (!product) {
+      return res.status(404).json({
+        error: "Product not found"
+      });
+    }
+
+    await product.update({
+      status: status,
+      lastUpdated: new Date()
+    });
+
+    res.json({
+      success: true,
+      message: `Product ${sku} status updated to ${status}`,
+      data: product
+    });
+
+  } catch (error) {
+    console.error('Error updating product status:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to update product status'
+    });
+  }
+};

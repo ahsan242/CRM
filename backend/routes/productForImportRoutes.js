@@ -13,6 +13,7 @@ const{
     updateProductForImport,
     deleteProductForImport,
     bulkUpdateStatus,
+    updateProductStatus
 } = require("../controllers/productForImportController");
 const router = express.Router();
 // const productForImportController = require('../controllers/productForImportController');
@@ -31,5 +32,6 @@ router.get('/:id', getProductForImportById);
 router.put('/:id', updateProductForImport);
 router.delete('/:id', deleteProductForImport);
 router.patch('/bulk-status', bulkUpdateStatus);
+router.put('/productforimports/status', updateProductStatus);
 
 module.exports = router;

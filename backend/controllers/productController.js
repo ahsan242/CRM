@@ -134,33 +134,7 @@ const processBulletPoints = async (bulletPointsData, productId) => {
 };
 
 // Helper function to download image from URL
-// const downloadImage = async (url, filename) => {
-//   try {
-//     const response = await axios({
-//       method: 'GET',
-//       url: url,
-//       responseType: 'stream'
-//     });
 
-//     const uploadsDir = path.join(__dirname, '..', '..', 'uploads');
-//     if (!fs.existsSync(uploadsDir)) {
-//       fs.mkdirSync(uploadsDir, { recursive: true });
-//     }
-
-//     const filePath = path.join(uploadsDir, filename);
-//     const writer = fs.createWriteStream(filePath);
-
-//     response.data.pipe(writer);
-
-//     return new Promise((resolve, reject) => {
-//       writer.on('finish', () => resolve(filename));
-//       writer.on('error', reject);
-//     });
-//   } catch (error) {
-//     console.error('Error downloading image:', error);
-//     return null;
-//   }
-// };
 
 // 📌 FIXED Helper function: download image to uploads folder
 const downloadImage = async (url, filename) => {
@@ -448,8 +422,9 @@ const processAdditionalProductData = async (
   }
 };
 
-// 📌 Helper function to process a single product
-const processSingleProduct = async (productData, jobId = null) => {
+
+// 📌 FIXED Helper function to process a single product
+const processSingleProduct = async (productData, jobId = null, importProduct = null) => {
   const { productCode, brand, price, quantity, index } = productData;
 
   try {
@@ -465,12 +440,19 @@ const processSingleProduct = async (productData, jobId = null) => {
       },
       timeout: 30000,
       validateStatus: function (status) {
-        return status < 500; // Resolve only if status code is less than 500
+        return status < 500;
       },
     });
 
     // Check for API errors
     if (response.status === 404) {
+      // ❌ UPDATE STATUS EVEN FOR FAILED IMPORTS IF importProduct IS PROVIDED
+      if (importProduct) {
+        await importProduct.update({ 
+          lastUpdated: new Date(),
+          errorMessage: "Product not found in Icecat database (404)"
+        });
+      }
       return {
         productCode,
         brand,
@@ -480,16 +462,27 @@ const processSingleProduct = async (productData, jobId = null) => {
     }
 
     if (response.status === 403) {
+      if (importProduct) {
+        await importProduct.update({ 
+          lastUpdated: new Date(),
+          errorMessage: "Icecat API access forbidden (403)"
+        });
+      }
       return {
         productCode,
         brand,
         status: "failed",
-        error:
-          "Icecat API access forbidden (403) - check API credentials or rate limits",
+        error: "Icecat API access forbidden (403) - check API credentials or rate limits",
       };
     }
 
     if (!response.data || !response.data.data) {
+      if (importProduct) {
+        await importProduct.update({ 
+          lastUpdated: new Date(),
+          errorMessage: "Invalid response from Icecat API"
+        });
+      }
       return {
         productCode,
         brand,
@@ -500,10 +493,13 @@ const processSingleProduct = async (productData, jobId = null) => {
 
     // Check for Icecat API errors in response data
     if (response.data.Error) {
-      console.log(
-        `❌ Icecat API error for ${productCode}:`,
-        response.data.Error
-      );
+      console.log(`❌ Icecat API error for ${productCode}:`, response.data.Error);
+      if (importProduct) {
+        await importProduct.update({ 
+          lastUpdated: new Date(),
+          errorMessage: response.data.Error.description || "Icecat API error"
+        });
+      }
       return {
         productCode,
         brand,
@@ -526,6 +522,26 @@ const processSingleProduct = async (productData, jobId = null) => {
       response.data
     );
 
+    // ✅ CRITICAL FIX: Always update ProductForImport status when importProduct is provided
+    if (importProduct) {
+      if (existingProduct) {
+        // Product exists - update to active
+        await importProduct.update({ 
+          status: 'active', 
+          lastUpdated: new Date(),
+          mainProductId: existingProduct.id
+        });
+        console.log(`✅ Updated ${productCode} status to ACTIVE (existing product)`);
+      } else {
+        // New product - update to active after creation
+        await importProduct.update({ 
+          status: 'active', 
+          lastUpdated: new Date() 
+        });
+        console.log(`✅ Updated ${productCode} status to ACTIVE (new product)`);
+      }
+    }
+
     if (existingProduct) {
       return {
         productCode,
@@ -538,45 +554,23 @@ const processSingleProduct = async (productData, jobId = null) => {
 
     const ImageUrl = response.data.data?.Image;
     const mainImageUrl = ImageUrl?.HighPic || ImageUrl?.Pic500x500?.LowPic;
-    // let mainImageFilename = null;
-
-    // if (mainImageUrl) {
-    //   const timestamp = Date.now();
-    //   const imageExt = path.extname(mainImageUrl) || ".jpg";
-    //   mainImageFilename = `icecat_${productCode}_main_${timestamp}${imageExt}`;
-    //   await downloadImage(mainImageUrl, mainImageFilename);
-    // }
-
-    // In your importProduct function, update this section:
-
+    
     let mainImageFilename = null;
     let downloadedFilename = null;
 
     if (mainImageUrl) {
       const timestamp = Date.now();
-
-      // Generate a clean filename without extension first
       const baseFilename = `icecat_${productCode}_main_${timestamp}`;
-
       console.log(`🖼️ Downloading main image from: ${mainImageUrl}`);
       downloadedFilename = await downloadImage(mainImageUrl, baseFilename);
-
       if (downloadedFilename) {
         mainImageFilename = downloadedFilename;
-        console.log(
-          `✅ Main image downloaded successfully: ${mainImageFilename}`
-        );
-      } else {
-        console.log(`❌ Failed to download main image from: ${mainImageUrl}`);
+        console.log(`✅ Main image downloaded successfully: ${mainImageFilename}`);
       }
-    } else {
-      console.log(`❌ No main image URL found in Icecat response`);
     }
 
     // ✅ FIXED CATEGORY HANDLING
     const categoryName = response.data.data?.GeneralInfo?.Category?.Name?.Value;
-
-    // Ensure we have a valid category
     let category;
     try {
       category = await ensureCategoryExists(1);
@@ -617,12 +611,11 @@ const processSingleProduct = async (productData, jobId = null) => {
       price: price || 0.0,
       quantity: quantity || 0,
       brandId: brandRecord.id,
-      categoryId: category.id, // ← Use the actual category ID (FIXED)
+      categoryId: category.id,
       subCategoryId: subCategory.id,
     };
 
     const product = await Product.create(productDataToCreate);
-
     await processAdditionalProductData(response.data, product.id, productCode);
 
     if (jobId) {
@@ -631,7 +624,7 @@ const processSingleProduct = async (productData, jobId = null) => {
         productCode: productCode,
         brand: brand,
         productId: product.id,
-        status: "completed", // ← Use 'completed' instead of 'success'
+        status: "completed",
         orderIndex: index,
       });
     }
@@ -647,10 +640,15 @@ const processSingleProduct = async (productData, jobId = null) => {
       message: "Product imported successfully",
     };
   } catch (error) {
-    console.error(
-      `❌ Failed to import ${productCode} - ${brand}:`,
-      error.message
-    );
+    console.error(`❌ Failed to import ${productCode} - ${brand}:`, error.message);
+
+    // ❌ Update lastUpdated even for failures
+    if (importProduct) {
+      await importProduct.update({ 
+        lastUpdated: new Date(),
+        errorMessage: error.message
+      });
+    }
 
     if (jobId) {
       await ProductImportItem.create({
@@ -672,227 +670,8 @@ const processSingleProduct = async (productData, jobId = null) => {
   }
 };
 
-// ===== CONTROLLER FUNCTIONS =====
+//..................
 
-// 📌 ENHANCED: Import products from ProductForImport table with detailed error tracking
-// exports.importFromProductForImport = async (req, res) => {
-//   try {
-//     const { count = 10, status = 'inactive', brand, distributor } = req.body;
-
-//     console.log(`🔄 Starting import from ProductForImport table`);
-//     console.log(`📋 Parameters: count=${count}, status=${status}, brand=${brand}, distributor=${distributor}`);
-
-//     // Build where clause
-//     const whereClause = { status: status };
-
-//     if (brand) {
-//       whereClause.brand = { [Op.iLike]: `%${brand}%` };
-//     }
-
-//     if (distributor) {
-//       whereClause.distributor = { [Op.iLike]: `%${distributor}%` };
-//     }
-
-//     // Get products from ProductForImport table
-//     const productsToImport = await ProductForImport.findAll({
-//       where: whereClause,
-//       order: [['createdAt', 'ASC']],
-//       limit: parseInt(count)
-//     });
-
-//     if (productsToImport.length === 0) {
-//       return res.status(404).json({
-//         error: "No products found for import with the specified criteria",
-//         criteria: {
-//           status,
-//           brand,
-//           distributor
-//         }
-//       });
-//     }
-
-//     console.log(`📦 Found ${productsToImport.length} products to import`);
-
-//     // Check daily import limit
-//     const today = new Date();
-//     today.setHours(0, 0, 0, 0);
-//     const tomorrow = new Date(today);
-//     tomorrow.setDate(tomorrow.getDate() + 1);
-
-//     const todayImports = await ProductImportJob.count({
-//       where: {
-//         createdAt: {
-//           [Op.gte]: today,
-//           [Op.lt]: tomorrow
-//         }
-//       }
-//     });
-
-//     if (todayImports + productsToImport.length > 300) {
-//       return res.status(400).json({
-//         error: `Daily import limit exceeded. Today's remaining quota: ${300 - todayImports} products`,
-//         requested: productsToImport.length,
-//         remaining: 300 - todayImports
-//       });
-//     }
-
-//     // Create import job for tracking
-//     const importJob = await ProductImportJob.create({
-//       totalProducts: productsToImport.length,
-//       processedProducts: 0,
-//       successfulImports: 0,
-//       failedImports: 0,
-//       status: 'processing',
-//       progress: 0,
-//       source: 'product_for_import'
-//     });
-
-//     // ENHANCED: Track detailed results with error information
-//     const results = {
-//       successful: [],
-//       failed: [],
-//       skipped: [],
-//       details: {
-//         successful: [],
-//         failed: [], // This will contain detailed error objects
-//         skipped: [] // This will contain skip reasons
-//       }
-//     };
-
-//     // Process each product sequentially with enhanced error tracking
-//     for (const [index, importProduct] of productsToImport.entries()) {
-//       try {
-//         console.log(`🔄 Processing ${index + 1}/${productsToImport.length}: ${importProduct.sku} - ${importProduct.brand}`);
-
-//         const productData = {
-//           productCode: importProduct.sku,
-//           brand: importProduct.brand,
-//           price: 0.0,
-//           quantity: 0,
-//           index: index
-//         };
-
-//         const result = await processSingleProduct(productData, importJob.id);
-
-//         if (result.status === 'success') {
-//           results.successful.push(importProduct.id);
-//           results.details.successful.push({
-//             productId: importProduct.id,
-//             sku: importProduct.sku,
-//             newProductId: result.productId,
-//             message: 'Successfully imported to main catalog'
-//           });
-//           // Update product status to 'active' in ProductForImport table
-//           await importProduct.update({ status: 'active', lastUpdated: new Date() });
-//         } else if (result.status === 'skipped') {
-//           results.skipped.push(importProduct.id);
-//           results.details.skipped.push({
-//             productId: importProduct.id,
-//             sku: importProduct.sku,
-//             reason: result.message || 'Product already exists in database',
-//             existingProductId: result.productId
-//           });
-//           // Mark as active since it already exists
-//           await importProduct.update({ status: 'active', lastUpdated: new Date() });
-//         } else {
-//           results.failed.push(importProduct.id);
-//           results.details.failed.push({
-//             productId: importProduct.id,
-//             sku: importProduct.sku,
-//             reason: result.error || 'Unknown error during import',
-//             error: result.error,
-//             suggestion: getFailureSuggestion(result.error)
-//           });
-//         }
-
-//         // Update job progress
-//         const progress = Math.round(((index + 1) / productsToImport.length) * 100);
-//         await importJob.update({
-//           processedProducts: index + 1,
-//           successfulImports: results.successful.length,
-//           failedImports: results.failed.length,
-//           progress: progress
-//         });
-
-//         // Small delay to avoid rate limiting
-//         await new Promise(resolve => setTimeout(resolve, 1000));
-
-//       } catch (error) {
-//         console.error(`❌ Error processing product ${importProduct.sku}:`, error.message);
-//         results.failed.push(importProduct.id);
-//         results.details.failed.push({
-//           productId: importProduct.id,
-//           sku: importProduct.sku,
-//           reason: 'Processing error',
-//           error: error.message,
-//           suggestion: 'Check product data and try again'
-//         });
-//       }
-//     }
-
-//     // Finalize import job
-//     const finalStatus = results.failed.length === productsToImport.length ? 'failed' :
-//                        results.successful.length > 0 ? 'completed' : 'partial';
-
-//     await importJob.update({
-//       status: finalStatus,
-//       completedAt: new Date()
-//     });
-
-//     // ENHANCED: Generate failure analysis
-//     const failureAnalysis = analyzeFailures(results.details.failed);
-
-//     console.log(`🎉 Import from ProductForImport completed: ${results.successful.length} successful, ${results.failed.length} failed, ${results.skipped.length} skipped`);
-
-//     // ENHANCED: Return detailed response with failure reasons
-//     res.status(200).json({
-//       success: true,
-//       message: `Import completed: ${results.successful.length} successful, ${results.failed.length} failed, ${results.skipped.length} skipped`,
-//       jobId: importJob.id,
-//       source: 'product_for_import',
-//       summary: {
-//         total: productsToImport.length,
-//         successful: results.successful.length,
-//         failed: results.failed.length,
-//         skipped: results.skipped.length,
-//         successRate: ((results.successful.length / productsToImport.length) * 100).toFixed(2) + '%'
-//       },
-//       detailedResults: {
-//         // Include all failure details for analysis
-//         failures: results.details.failed.map(f => ({
-//           sku: f.sku,
-//           reason: f.reason,
-//           error: f.error || null,
-//           suggestion: f.suggestion
-//         })),
-//         skips: results.details.skipped.map(s => ({
-//           sku: s.sku,
-//           reason: s.reason,
-//           existingProductId: s.existingProductId
-//         })),
-//         successful: results.details.successful.map(s => ({
-//           sku: s.sku,
-//           newProductId: s.newProductId
-//         }))
-//       },
-//       analysis: failureAnalysis,
-//       recommendations: generateRecommendations(results),
-//       importJob: {
-//         id: importJob.id,
-//         status: importJob.status,
-//         progress: importJob.progress
-//       }
-//     });
-
-//   } catch (error) {
-//     console.error("❌ Error in import from ProductForImport:", error);
-//     res.status(500).json({
-//       error: error.message || 'Failed to process import from ProductForImport'
-//     });
-//   }
-// };
-
-// 📌 ENHANCED: Import products from ProductForImport table with AUTO-CLEANUP
 exports.importFromProductForImport = async (req, res) => {
   try {
     const {
@@ -908,8 +687,8 @@ exports.importFromProductForImport = async (req, res) => {
       `📋 Parameters: count=${count}, status=${status}, brand=${brand}, distributor=${distributor}, autoCleanup=${autoCleanup}`
     );
 
-    // Build where clause
-    const whereClause = { status: status };
+    // Build where clause - IMPORTANT: Only get inactive products
+    const whereClause = { status: "inactive" }; // Force inactive only
 
     if (brand) {
       whereClause.brand = { [Op.iLike]: `%${brand}%` };
@@ -982,8 +761,8 @@ exports.importFromProductForImport = async (req, res) => {
       skipped: [],
       details: {
         successful: [],
-        failed: [], // This will contain detailed error objects
-        skipped: [], // This will contain skip reasons
+        failed: [],
+        skipped: [],
       },
     };
 
@@ -1006,6 +785,8 @@ exports.importFromProductForImport = async (req, res) => {
 
         const result = await processSingleProduct(productData, importJob.id);
 
+        console.log(`📊 Result for ${importProduct.sku}:`, result);
+
         if (result.status === "success") {
           results.successful.push(importProduct.id);
           results.details.successful.push({
@@ -1014,11 +795,14 @@ exports.importFromProductForImport = async (req, res) => {
             newProductId: result.productId,
             message: "Successfully imported to main catalog",
           });
-          // Update product status to 'active' in ProductForImport table
+          
+          // ✅ UPDATE STATUS TO ACTIVE
           await importProduct.update({
             status: "active",
             lastUpdated: new Date(),
           });
+          console.log(`✅ Updated ${importProduct.sku} status to ACTIVE`);
+
         } else if (result.status === "skipped") {
           results.skipped.push(importProduct.id);
           results.details.skipped.push({
@@ -1027,11 +811,14 @@ exports.importFromProductForImport = async (req, res) => {
             reason: result.message || "Product already exists in database",
             existingProductId: result.productId,
           });
-          // Mark as active since it already exists
+          
+          // ✅ UPDATE STATUS TO ACTIVE even for skipped (already exists)
           await importProduct.update({
             status: "active",
             lastUpdated: new Date(),
           });
+          console.log(`✅ Updated ${importProduct.sku} status to ACTIVE (skipped - already exists)`);
+
         } else {
           results.failed.push(importProduct.id);
           results.details.failed.push({
@@ -1041,6 +828,8 @@ exports.importFromProductForImport = async (req, res) => {
             error: result.error,
             suggestion: getFailureSuggestion(result.error),
           });
+          // Keep status as inactive for failed imports
+          console.log(`❌ ${importProduct.sku} failed - status remains INACTIVE`);
         }
 
         // Update job progress
@@ -1056,6 +845,7 @@ exports.importFromProductForImport = async (req, res) => {
 
         // Small delay to avoid rate limiting
         await new Promise((resolve) => setTimeout(resolve, 1000));
+
       } catch (error) {
         console.error(
           `❌ Error processing product ${importProduct.sku}:`,
@@ -1092,7 +882,7 @@ exports.importFromProductForImport = async (req, res) => {
       `🎉 Import from ProductForImport completed: ${results.successful.length} successful, ${results.failed.length} failed, ${results.skipped.length} skipped`
     );
 
-    // 🚀 AUTO-CLEANUP: Automatically delete failed products if autoCleanup is true and there are failures
+    // AUTO-CLEANUP
     let cleanupResults = null;
     if (autoCleanup && results.failed.length > 0 && brand) {
       console.log(`🧹 Starting AUTO-CLEANUP for failed ${brand} products...`);
@@ -1153,6 +943,7 @@ exports.importFromProductForImport = async (req, res) => {
     });
   }
 };
+
 
 // 🆕 AUTO-CLEANUP FUNCTION
 const autoCleanupFailedProducts = async (brand, failedItems) => {
@@ -1358,7 +1149,63 @@ function generateRecommendations(results) {
   return recs;
 }
 
-// ===== ADD THESE HELPER FUNCTIONS AT THE BOTTOM OF YOUR FILE =====
+// 🚀 QUICK FIX: Activate specific product immediately
+exports.activateProductImmediately = async (req, res) => {
+  try {
+    const { sku, brand, distributor } = req.body;
+    
+    if (!sku || !brand) {
+      return res.status(400).json({
+        error: "SKU and brand are required"
+      });
+    }
+
+    console.log(`🚀 Activating product: ${sku} - ${brand}`);
+
+    // Find the product in ProductForImport
+    const importProduct = await ProductForImport.findOne({
+      where: {
+        sku: sku,
+        brand: brand,
+        ...(distributor && { distributor: distributor })
+      }
+    });
+
+    if (!importProduct) {
+      return res.status(404).json({
+        error: `Product not found in import list: ${sku} - ${brand}`
+      });
+    }
+
+    // Update status to active immediately
+    await importProduct.update({
+      status: 'active',
+      lastUpdated: new Date(),
+      activatedAt: new Date()
+    });
+
+    console.log(`✅ IMMEDIATELY ACTIVATED: ${sku} - ${brand}`);
+
+    res.json({
+      success: true,
+      message: `Product ${sku} activated successfully`,
+      product: {
+        sku: importProduct.sku,
+        brand: importProduct.brand,
+        distributor: importProduct.distributor,
+        status: 'active',
+        lastUpdated: importProduct.lastUpdated
+      }
+    });
+
+  } catch (error) {
+    console.error('Error activating product:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to activate product'
+    });
+  }
+};
+
 
 // Helper function to analyze failure patterns
 function analyzeFailures(failedItems) {
@@ -1498,7 +1345,6 @@ exports.getProductsForImport = async (req, res) => {
   }
 };
 
-// ===== EXISTING CONTROLLER FUNCTIONS =====
 
 exports.importProduct = async (req, res) => {
   console.log("Import product request received:", req.body);
@@ -1976,8 +1822,6 @@ exports.getimportsProducts = async (req, res) => {
     });
   }
 };
-
-// ... rest of your existing functions (createProduct, getProducts, getProduct, updateProduct, deleteProduct) remain the same ...
 
 exports.createProduct = async (req, res) => {
   try {
