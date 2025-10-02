@@ -53,25 +53,33 @@ const ensureCategoryExists = async (categoryId = 1) => {
   try {
     let category = await Category.findByPk(categoryId);
     if (!category) {
-      // Create default category
-      category = await Category.create({
-        id: categoryId,
-        title: "Electronics",
-        description: "Default electronics category",
-        status: "active",
+      // If the specific ID doesn't exist, try to find any active category
+      category = await Category.findOne({
+        where: { status: "active" },
+        order: [["id", "ASC"]],
       });
-      console.log(`✅ Created default category with ID: ${category.id}`);
+
+      if (!category) {
+        // Create a default category if none exists
+        category = await Category.create({
+          title: "Electronics",
+          description: "Default electronics category",
+          status: "active",
+        });
+        console.log(`✅ Created default category with ID: ${category.id}`);
+      }
     }
     return category;
   } catch (error) {
     console.error("Error ensuring category exists:", error);
-    // Fallback: get any existing category
-    const fallbackCategory = await Category.findOne();
-    if (!fallbackCategory) {
-      throw new Error(
-        "No categories exist in database. Please create at least one category."
-      );
-    }
+    // Final fallback: get the first category or create one
+    const fallbackCategory =
+      (await Category.findOne()) ||
+      (await Category.create({
+        title: "General",
+        description: "General category",
+        status: "active",
+      }));
     return fallbackCategory;
   }
 };
@@ -132,9 +140,6 @@ const processBulletPoints = async (bulletPointsData, productId) => {
     console.error("❌ Error processing bullet points:", error);
   }
 };
-
-// Helper function to download image from URL
-
 
 // 📌 FIXED Helper function: download image to uploads folder
 const downloadImage = async (url, filename) => {
@@ -422,9 +427,12 @@ const processAdditionalProductData = async (
   }
 };
 
-
 // 📌 FIXED Helper function to process a single product
-const processSingleProduct = async (productData, jobId = null, importProduct = null) => {
+const processSingleProduct = async (
+  productData,
+  jobId = null,
+  importProduct = null
+) => {
   const { productCode, brand, price, quantity, index } = productData;
 
   try {
@@ -444,43 +452,76 @@ const processSingleProduct = async (productData, jobId = null, importProduct = n
       },
     });
 
-    // Check for API errors
+    // ✅ CHECK FOR 404 - PRODUCT NOT FOUND IN ICECAT
+    // if (response.status === 404) {
+    //   console.log(`❌ Product not found in Icecat database: ${productCode} - ${brand}`);
+
+    //   if (importProduct) {
+    //     await importProduct.update({
+    //       status: 'pending',
+    //       lastUpdated: new Date(),
+    //       errorMessage: "Product not found in Icecat database (404)"
+    //     });
+    //     console.log(`🔄 Updated ${productCode} status to PENDING (not found in Icecat)`);
+    //   }
+
+    //   return {
+    //     productCode,
+    //     brand,
+    //     status: "failed",
+    //     error: "Product not found in Icecat database (404)",
+    //     importStatus: 'pending'
+    //   };
+    // }
+
     if (response.status === 404) {
-      // ❌ UPDATE STATUS EVEN FOR FAILED IMPORTS IF importProduct IS PROVIDED
+      console.log(
+        `❌ Product not found in Icecat database: ${productCode} - ${brand}`
+      );
+
       if (importProduct) {
-        await importProduct.update({ 
+        await importProduct.update({
+          status: "pending", // ✅ This sets status to pending for 404 errors
           lastUpdated: new Date(),
-          errorMessage: "Product not found in Icecat database (404)"
+          errorMessage: "Product not found in Icecat database (404)",
         });
+        console.log(
+          `🔄 Updated ${productCode} status to PENDING (not found in Icecat)`
+        );
       }
+
       return {
         productCode,
         brand,
         status: "failed",
         error: "Product not found in Icecat database (404)",
+        importStatus: "pending", // ✅ Return the actual status that was set
       };
     }
 
-    if (response.status === 403) {
+    // Handle other API errors
+    if (response.status === 403 || response.status >= 500) {
       if (importProduct) {
-        await importProduct.update({ 
+        await importProduct.update({
+          status: "pending",
           lastUpdated: new Date(),
-          errorMessage: "Icecat API access forbidden (403)"
+          errorMessage: `Icecat API error: ${response.status}`,
         });
       }
       return {
         productCode,
         brand,
         status: "failed",
-        error: "Icecat API access forbidden (403) - check API credentials or rate limits",
+        error: `Icecat API error: ${response.status}`,
       };
     }
 
     if (!response.data || !response.data.data) {
       if (importProduct) {
-        await importProduct.update({ 
+        await importProduct.update({
+          status: "pending",
           lastUpdated: new Date(),
-          errorMessage: "Invalid response from Icecat API"
+          errorMessage: "Invalid response from Icecat API",
         });
       }
       return {
@@ -493,11 +534,15 @@ const processSingleProduct = async (productData, jobId = null, importProduct = n
 
     // Check for Icecat API errors in response data
     if (response.data.Error) {
-      console.log(`❌ Icecat API error for ${productCode}:`, response.data.Error);
+      console.log(
+        `❌ Icecat API error for ${productCode}:`,
+        response.data.Error
+      );
       if (importProduct) {
-        await importProduct.update({ 
+        await importProduct.update({
+          status: "pending",
           lastUpdated: new Date(),
-          errorMessage: response.data.Error.description || "Icecat API error"
+          errorMessage: response.data.Error.description || "Icecat API error",
         });
       }
       return {
@@ -522,75 +567,62 @@ const processSingleProduct = async (productData, jobId = null, importProduct = n
       response.data
     );
 
-    // ✅ CRITICAL FIX: Always update ProductForImport status when importProduct is provided
-    if (importProduct) {
-      if (existingProduct) {
-        // Product exists - update to active
-        await importProduct.update({ 
-          status: 'active', 
-          lastUpdated: new Date(),
-          mainProductId: existingProduct.id
-        });
-        console.log(`✅ Updated ${productCode} status to ACTIVE (existing product)`);
-      } else {
-        // New product - update to active after creation
-        await importProduct.update({ 
-          status: 'active', 
-          lastUpdated: new Date() 
-        });
-        console.log(`✅ Updated ${productCode} status to ACTIVE (new product)`);
-      }
-    }
+    // ✅ FIXED CATEGORY HANDLING - More robust approach
+    const categoryName = response.data.data?.GeneralInfo?.Category?.Name?.Value;
 
-    if (existingProduct) {
+    // Ensure we have valid category and subcategory
+    let category;
+    let subCategory;
+
+    try {
+      category = await ensureCategoryExists(1);
+      console.log(`✅ Using category: ${category.title} (ID: ${category.id})`);
+
+      subCategory = await ensureSubCategoryExists(categoryName, category.id);
+      console.log(
+        `✅ Using subcategory: ${subCategory.title} (ID: ${subCategory.id})`
+      );
+    } catch (categoryError) {
+      console.error(
+        `❌ Category setup error for ${productCode}:`,
+        categoryError.message
+      );
+
+      if (importProduct) {
+        await importProduct.update({
+          status: "pending",
+          lastUpdated: new Date(),
+          errorMessage: `Category setup failed: ${categoryError.message}`,
+        });
+      }
+
       return {
         productCode,
         brand,
-        status: "skipped",
-        message: "Product already exists in database",
-        productId: existingProduct.id,
+        status: "failed",
+        error: `Category setup failed: ${categoryError.message}`,
       };
     }
 
     const ImageUrl = response.data.data?.Image;
     const mainImageUrl = ImageUrl?.HighPic || ImageUrl?.Pic500x500?.LowPic;
-    
+
     let mainImageFilename = null;
-    let downloadedFilename = null;
 
     if (mainImageUrl) {
       const timestamp = Date.now();
       const baseFilename = `icecat_${productCode}_main_${timestamp}`;
       console.log(`🖼️ Downloading main image from: ${mainImageUrl}`);
-      downloadedFilename = await downloadImage(mainImageUrl, baseFilename);
+      const downloadedFilename = await downloadImage(
+        mainImageUrl,
+        baseFilename
+      );
       if (downloadedFilename) {
         mainImageFilename = downloadedFilename;
-        console.log(`✅ Main image downloaded successfully: ${mainImageFilename}`);
+        console.log(
+          `✅ Main image downloaded successfully: ${mainImageFilename}`
+        );
       }
-    }
-
-    // ✅ FIXED CATEGORY HANDLING
-    const categoryName = response.data.data?.GeneralInfo?.Category?.Name?.Value;
-    let category;
-    try {
-      category = await ensureCategoryExists(1);
-    } catch (error) {
-      return {
-        productCode,
-        brand,
-        status: "failed",
-        error: `Category error: ${error.message}`,
-      };
-    }
-
-    let subCategory = await SubCategory.findOne({
-      where: { title: categoryName },
-    });
-    if (!subCategory) {
-      subCategory = await SubCategory.create({
-        title: categoryName || "Uncategorized",
-        parentId: category.id,
-      });
     }
 
     const generalInfo = response.data.data?.GeneralInfo;
@@ -611,11 +643,39 @@ const processSingleProduct = async (productData, jobId = null, importProduct = n
       price: price || 0.0,
       quantity: quantity || 0,
       brandId: brandRecord.id,
-      categoryId: category.id,
-      subCategoryId: subCategory.id,
+      categoryId: category.id, // ✅ Now guaranteed to be valid
+      subCategoryId: subCategory.id, // ✅ Now guaranteed to be valid
     };
 
-    const product = await Product.create(productDataToCreate);
+    // ✅ SUCCESS CASE: Create/Update product and set status to active
+    let product;
+    if (existingProduct) {
+      // Update existing product
+      await cleanupProductAssets(existingProduct.id);
+      await Product.update(productDataToCreate, {
+        where: { id: existingProduct.id },
+      });
+      product = await Product.findByPk(existingProduct.id);
+      console.log(`🔄 Updated existing product: ${product.title}`);
+    } else {
+      // Create new product
+      product = await Product.create(productDataToCreate);
+      console.log(`🆕 Created new product: ${product.title}`);
+    }
+
+    // ✅ Update import product status to ACTIVE
+    if (importProduct) {
+      await importProduct.update({
+        status: "active",
+        lastUpdated: new Date(),
+        mainProductId: product.id,
+      });
+      console.log(
+        `✅ Updated ${productCode} status to ACTIVE (successful import)`
+      );
+    }
+
+    // Process additional data
     await processAdditionalProductData(response.data, product.id, productCode);
 
     if (jobId) {
@@ -640,14 +700,29 @@ const processSingleProduct = async (productData, jobId = null, importProduct = n
       message: "Product imported successfully",
     };
   } catch (error) {
-    console.error(`❌ Failed to import ${productCode} - ${brand}:`, error.message);
+    console.error(
+      `❌ Failed to import ${productCode} - ${brand}:`,
+      error.message
+    );
 
-    // ❌ Update lastUpdated even for failures
-    if (importProduct) {
+    // ✅ ERROR CASE: Set status to pending for any errors
+    // if (importProduct) {
+    //   await importProduct.update({
+    //     status: "pending",
+    //     lastUpdated: new Date(),
+    //     errorMessage: error.message,
+    //   });
+    //   console.log(
+    //     `🔄 Updated ${productCode} status to PENDING (error occurred)`
+    //   );
+    // }
+     if (importProduct) {
       await importProduct.update({ 
+        status: 'pending', // ✅ This sets status to pending for any other errors
         lastUpdated: new Date(),
         errorMessage: error.message
       });
+      console.log(`🔄 Updated ${productCode} status to PENDING (error occurred)`);
     }
 
     if (jobId) {
@@ -670,7 +745,296 @@ const processSingleProduct = async (productData, jobId = null, importProduct = n
   }
 };
 
-//..................
+// exports.importFromProductForImport = async (req, res) => {
+//   try {
+//     const {
+//       count = 10,
+//       status = "inactive",
+//       brand,
+//       distributor,
+//       autoCleanup = true,
+//     } = req.body;
+
+//     console.log(`🔄 Starting import from ProductForImport table`);
+//     console.log(
+//       `📋 Parameters: count=${count}, status=${status}, brand=${brand}, distributor=${distributor}, autoCleanup=${autoCleanup}`
+//     );
+
+//     // Build where clause - IMPORTANT: Only get inactive products
+//     const whereClause = { status: "inactive" }; // Force inactive only
+
+//     if (brand) {
+//       whereClause.brand = { [Op.iLike]: `%${brand}%` };
+//     }
+
+//     if (distributor) {
+//       whereClause.distributor = { [Op.iLike]: `%${distributor}%` };
+//     }
+
+//     // Get products from ProductForImport table
+//     const productsToImport = await ProductForImport.findAll({
+//       where: whereClause,
+//       order: [["createdAt", "ASC"]],
+//       limit: parseInt(count),
+//     });
+
+//     if (productsToImport.length === 0) {
+//       return res.status(404).json({
+//         error: "No products found for import with the specified criteria",
+//         criteria: {
+//           status,
+//           brand,
+//           distributor,
+//         },
+//       });
+//     }
+
+//     console.log(`📦 Found ${productsToImport.length} products to import`);
+
+//     // Check daily import limit
+//     const today = new Date();
+//     today.setHours(0, 0, 0, 0);
+//     const tomorrow = new Date(today);
+//     tomorrow.setDate(tomorrow.getDate() + 1);
+
+//     const todayImports = await ProductImportJob.count({
+//       where: {
+//         createdAt: {
+//           [Op.gte]: today,
+//           [Op.lt]: tomorrow,
+//         },
+//       },
+//     });
+
+//     if (todayImports + productsToImport.length > 300) {
+//       return res.status(400).json({
+//         error: `Daily import limit exceeded. Today's remaining quota: ${
+//           300 - todayImports
+//         } products`,
+//         requested: productsToImport.length,
+//         remaining: 300 - todayImports,
+//       });
+//     }
+
+//     // Create import job for tracking
+//     const importJob = await ProductImportJob.create({
+//       totalProducts: productsToImport.length,
+//       processedProducts: 0,
+//       successfulImports: 0,
+//       failedImports: 0,
+//       status: "processing",
+//       progress: 0,
+//       source: "product_for_import",
+//     });
+
+//     // Track detailed results with error information
+//     const results = {
+//       successful: [],
+//       failed: [],
+//       skipped: [],
+//       details: {
+//         successful: [],
+//         failed: [],
+//         skipped: [],
+//       },
+//     };
+
+//     // Process each product sequentially with enhanced error tracking
+//     for (const [index, importProduct] of productsToImport.entries()) {
+//       try {
+//         console.log(
+//           `🔄 Processing ${index + 1}/${productsToImport.length}: ${
+//             importProduct.sku
+//           } - ${importProduct.brand}`
+//         );
+
+//         const productData = {
+//           productCode: importProduct.sku,
+//           brand: importProduct.brand,
+//           price: 0.0,
+//           quantity: 0,
+//           index: index,
+//         };
+
+//         const result = await processSingleProduct(productData, importJob.id);
+
+//         console.log(`📊 Result for ${importProduct.sku}:`, result);
+
+//         if (result.status === "success") {
+//           results.successful.push(importProduct.id);
+//           results.details.successful.push({
+//             productId: importProduct.id,
+//             sku: importProduct.sku,
+//             newProductId: result.productId,
+//             message: "Successfully imported to main catalog",
+//           });
+
+//           // ✅ UPDATE STATUS TO ACTIVE
+//           await importProduct.update({
+//             status: "active",
+//             lastUpdated: new Date(),
+//           });
+//           console.log(`✅ Updated ${importProduct.sku} status to ACTIVE`);
+//         } else if (result.status === "skipped") {
+//           results.skipped.push(importProduct.id);
+//           results.details.skipped.push({
+//             productId: importProduct.id,
+//             sku: importProduct.sku,
+//             reason: result.message || "Product already exists in database",
+//             existingProductId: result.productId,
+//           });
+
+//           // ✅ UPDATE STATUS TO ACTIVE even for skipped (already exists)
+//           await importProduct.update({
+//             status: "active",
+//             lastUpdated: new Date(),
+//           });
+//           console.log(
+//             `✅ Updated ${importProduct.sku} status to ACTIVE (skipped - already exists)`
+//           );
+//         } else {
+//           results.failed.push(importProduct.id);
+//           results.details.failed.push({
+//             productId: importProduct.id,
+//             sku: importProduct.sku,
+//             reason: result.error || "Unknown error during import",
+//             error: result.error,
+//             suggestion: getFailureSuggestion(result.error),
+//           });
+//           // Keep status as inactive for failed imports
+//           console.log(
+//             `❌ ${importProduct.sku} failed - status remains INACTIVE`
+//           );
+//         }
+
+//         // Update job progress
+//         const progress = Math.round(
+//           ((index + 1) / productsToImport.length) * 100
+//         );
+//         await importJob.update({
+//           processedProducts: index + 1,
+//           successfulImports: results.successful.length,
+//           failedImports: results.failed.length,
+//           progress: progress,
+//         });
+
+//         // Small delay to avoid rate limiting
+//         await new Promise((resolve) => setTimeout(resolve, 1000));
+//       } catch (error) {
+//         console.error(
+//           `❌ Error processing product ${importProduct.sku}:`,
+//           error.message
+//         );
+//         results.failed.push(importProduct.id);
+//         results.details.failed.push({
+//           productId: importProduct.id,
+//           sku: importProduct.sku,
+//           reason: "Processing error",
+//           error: error.message,
+//           suggestion: "Check product data and try again",
+//         });
+//       }
+//     }
+
+//     // Finalize import job
+//     const finalStatus =
+//       results.failed.length === productsToImport.length
+//         ? "failed"
+//         : results.successful.length > 0
+//         ? "completed"
+//         : "partial";
+
+//     await importJob.update({
+//       status: finalStatus,
+//       completedAt: new Date(),
+//     });
+
+//     // Generate failure analysis
+//     const failureAnalysis = analyzeFailures(results.details.failed);
+
+//     console.log(
+//       `🎉 Import from ProductForImport completed: ${results.successful.length} successful, ${results.failed.length} failed, ${results.skipped.length} skipped`
+//     );
+
+//     // AUTO-CLEANUP
+//     let cleanupResults = null;
+//     if (autoCleanup && results.failed.length > 0 && brand) {
+//       console.log(`🧹 Starting AUTO-CLEANUP for failed ${brand} products...`);
+//       cleanupResults = await autoCleanupFailedProducts(
+//         brand,
+//         results.details.failed
+//       );
+//     }
+
+//     // Prepare response
+//     const response = {
+//       success: true,
+//       message: `Import completed: ${results.successful.length} successful, ${results.failed.length} failed, ${results.skipped.length} skipped`,
+//       jobId: importJob.id,
+//       source: "product_for_import",
+//       summary: {
+//         total: productsToImport.length,
+//         successful: results.successful.length,
+//         failed: results.failed.length,
+//         skipped: results.skipped.length,
+//         successRate:
+//           ((results.successful.length / productsToImport.length) * 100).toFixed(
+//             2
+//           ) + "%",
+//       },
+//       detailedResults: {
+//         failures: results.details.failed.map((f) => ({
+//           sku: f.sku,
+//           reason: f.reason,
+//           error: f.error || null,
+//           suggestion: f.suggestion,
+//         })),
+//         skips: results.details.skipped.map((s) => ({
+//           sku: s.sku,
+//           reason: s.reason,
+//           existingProductId: s.existingProductId,
+//         })),
+//         successful: results.details.successful.map((s) => ({
+//           sku: s.sku,
+//           newProductId: s.newProductId,
+//         })),
+//       },
+//       analysis: failureAnalysis,
+//       recommendations: generateRecommendations(results),
+//     };
+
+//     // Add cleanup results to response if cleanup was performed
+//     if (cleanupResults) {
+//       response.autoCleanup = cleanupResults;
+//       response.message += ` | Auto-cleanup completed: ${cleanupResults.deletionResults.products} products deleted`;
+//     }
+
+//     res.status(200).json(response);
+
+//   } catch (error) {
+//     console.error(
+//       `❌ Error processing product ${importProduct.sku}:`,
+//       error.message
+//     );
+//     results.failed.push(importProduct.id);
+//     results.details.failed.push({
+//       productId: importProduct.id,
+//       sku: importProduct.sku,
+//       reason: "Processing error",
+//       error: error.message,
+//       suggestion: "Check product data and try again",
+//     });
+
+//     // ✅ IMPORTANT: Update status to pending for any processing errors
+//     await importProduct.update({
+//       status: "pending",
+//       lastUpdated: new Date(),
+//       errorMessage: error.message,
+//     });
+//   }
+// };
+
+// 🆕 AUTO-CLEANUP FUNCTION
 
 exports.importFromProductForImport = async (req, res) => {
   try {
@@ -783,10 +1147,16 @@ exports.importFromProductForImport = async (req, res) => {
           index: index,
         };
 
-        const result = await processSingleProduct(productData, importJob.id);
+        // ✅ PASS THE importProduct TO processSingleProduct
+        const result = await processSingleProduct(
+          productData,
+          importJob.id,
+          importProduct // This is the key change - pass the importProduct record
+        );
 
         console.log(`📊 Result for ${importProduct.sku}:`, result);
 
+        // ✅ SIMPLIFIED STATUS HANDLING - processSingleProduct now handles status updates
         if (result.status === "success") {
           results.successful.push(importProduct.id);
           results.details.successful.push({
@@ -795,14 +1165,6 @@ exports.importFromProductForImport = async (req, res) => {
             newProductId: result.productId,
             message: "Successfully imported to main catalog",
           });
-          
-          // ✅ UPDATE STATUS TO ACTIVE
-          await importProduct.update({
-            status: "active",
-            lastUpdated: new Date(),
-          });
-          console.log(`✅ Updated ${importProduct.sku} status to ACTIVE`);
-
         } else if (result.status === "skipped") {
           results.skipped.push(importProduct.id);
           results.details.skipped.push({
@@ -811,14 +1173,6 @@ exports.importFromProductForImport = async (req, res) => {
             reason: result.message || "Product already exists in database",
             existingProductId: result.productId,
           });
-          
-          // ✅ UPDATE STATUS TO ACTIVE even for skipped (already exists)
-          await importProduct.update({
-            status: "active",
-            lastUpdated: new Date(),
-          });
-          console.log(`✅ Updated ${importProduct.sku} status to ACTIVE (skipped - already exists)`);
-
         } else {
           results.failed.push(importProduct.id);
           results.details.failed.push({
@@ -827,9 +1181,8 @@ exports.importFromProductForImport = async (req, res) => {
             reason: result.error || "Unknown error during import",
             error: result.error,
             suggestion: getFailureSuggestion(result.error),
+            importStatus: result.importStatus || "pending", // Track the actual status set
           });
-          // Keep status as inactive for failed imports
-          console.log(`❌ ${importProduct.sku} failed - status remains INACTIVE`);
         }
 
         // Update job progress
@@ -845,12 +1198,19 @@ exports.importFromProductForImport = async (req, res) => {
 
         // Small delay to avoid rate limiting
         await new Promise((resolve) => setTimeout(resolve, 1000));
-
       } catch (error) {
         console.error(
           `❌ Error processing product ${importProduct.sku}:`,
           error.message
         );
+
+        // ✅ UPDATE STATUS TO PENDING FOR PROCESSING ERRORS
+        await importProduct.update({
+          status: "pending",
+          lastUpdated: new Date(),
+          errorMessage: error.message,
+        });
+
         results.failed.push(importProduct.id);
         results.details.failed.push({
           productId: importProduct.id,
@@ -858,6 +1218,7 @@ exports.importFromProductForImport = async (req, res) => {
           reason: "Processing error",
           error: error.message,
           suggestion: "Check product data and try again",
+          importStatus: "pending",
         });
       }
     }
@@ -914,6 +1275,7 @@ exports.importFromProductForImport = async (req, res) => {
           reason: f.reason,
           error: f.error || null,
           suggestion: f.suggestion,
+          currentStatus: f.importStatus || "pending",
         })),
         skips: results.details.skipped.map((s) => ({
           sku: s.sku,
@@ -937,15 +1299,13 @@ exports.importFromProductForImport = async (req, res) => {
 
     res.status(200).json(response);
   } catch (error) {
-    console.error("❌ Error in import from ProductForImport:", error);
+    console.error("❌ Error in importFromProductForImport:", error);
     res.status(500).json({
-      error: error.message || "Failed to process import from ProductForImport",
+      error: error.message || "Failed to process import from queue",
     });
   }
 };
 
-
-// 🆕 AUTO-CLEANUP FUNCTION
 const autoCleanupFailedProducts = async (brand, failedItems) => {
   try {
     console.log(`🧹 Starting automatic cleanup for brand: ${brand}`);
@@ -1066,8 +1426,6 @@ const autoCleanupFailedProducts = async (brand, failedItems) => {
   }
 };
 
-// ===== HELPER FUNCTIONS =====
-
 // Helper function to analyze failure patterns
 function analyzeFailures(failedItems) {
   const reasons = {};
@@ -1153,10 +1511,10 @@ function generateRecommendations(results) {
 exports.activateProductImmediately = async (req, res) => {
   try {
     const { sku, brand, distributor } = req.body;
-    
+
     if (!sku || !brand) {
       return res.status(400).json({
-        error: "SKU and brand are required"
+        error: "SKU and brand are required",
       });
     }
 
@@ -1167,21 +1525,21 @@ exports.activateProductImmediately = async (req, res) => {
       where: {
         sku: sku,
         brand: brand,
-        ...(distributor && { distributor: distributor })
-      }
+        ...(distributor && { distributor: distributor }),
+      },
     });
 
     if (!importProduct) {
       return res.status(404).json({
-        error: `Product not found in import list: ${sku} - ${brand}`
+        error: `Product not found in import list: ${sku} - ${brand}`,
       });
     }
 
     // Update status to active immediately
     await importProduct.update({
-      status: 'active',
+      status: "active",
       lastUpdated: new Date(),
-      activatedAt: new Date()
+      activatedAt: new Date(),
     });
 
     console.log(`✅ IMMEDIATELY ACTIVATED: ${sku} - ${brand}`);
@@ -1193,19 +1551,17 @@ exports.activateProductImmediately = async (req, res) => {
         sku: importProduct.sku,
         brand: importProduct.brand,
         distributor: importProduct.distributor,
-        status: 'active',
-        lastUpdated: importProduct.lastUpdated
-      }
+        status: "active",
+        lastUpdated: importProduct.lastUpdated,
+      },
     });
-
   } catch (error) {
-    console.error('Error activating product:', error);
+    console.error("Error activating product:", error);
     res.status(500).json({
-      error: error.message || 'Failed to activate product'
+      error: error.message || "Failed to activate product",
     });
   }
 };
-
 
 // Helper function to analyze failure patterns
 function analyzeFailures(failedItems) {
@@ -1345,7 +1701,6 @@ exports.getProductsForImport = async (req, res) => {
   }
 };
 
-
 exports.importProduct = async (req, res) => {
   console.log("Import product request received:", req.body);
 
@@ -1358,6 +1713,14 @@ exports.importProduct = async (req, res) => {
       });
     }
 
+    // First, check if this product exists in ProductForImport table
+    const importProduct = await ProductForImport.findOne({
+      where: {
+        sku: productCode,
+        brand: brand,
+      },
+    });
+
     const response = await axios.get("https://live.icecat.biz/api/", {
       params: {
         shopname: "vcloudchoice",
@@ -1366,7 +1729,37 @@ exports.importProduct = async (req, res) => {
         ProductCode: productCode,
         app_key: "HhFakMaKzZsHF3fb6O_VUXzMNoky7Xpf",
       },
+      validateStatus: function (status) {
+        return status < 500;
+      },
     });
+
+    // ✅ Handle 404 response - Product not found in Icecat
+    if (response.status === 404) {
+      console.log(
+        `❌ Product not found in Icecat database: ${productCode} - ${brand}`
+      );
+
+      if (importProduct) {
+        // Update the status to 'pending' when product is not found
+        await importProduct.update({
+          status: "pending",
+          lastUpdated: new Date(),
+          errorMessage: "Product not found in Icecat database (404)",
+        });
+        console.log(
+          `🔄 Updated ${productCode} status to PENDING in ProductForImport`
+        );
+      }
+
+      return res.status(404).json({
+        error: "The requested product is not present in the Icecat database",
+        status: "pending",
+        message: "Product marked as pending for manual review",
+        productCode,
+        brand,
+      });
+    }
 
     // Extract UPC only
     const upc = extractUPC(response.data);
@@ -1440,7 +1833,7 @@ exports.importProduct = async (req, res) => {
       price: req.body.price ? parseFloat(req.body.price) : 0.0,
       quantity: req.body.quantity ? parseInt(req.body.quantity) : 0,
       brandId: brandRecord.id,
-      categoryId: category.id, // ← Use the actual category ID (FIXED)
+      categoryId: category.id,
       subCategoryId: subCategory.id,
     };
 
@@ -1462,6 +1855,18 @@ exports.importProduct = async (req, res) => {
       // ✅ CREATE NEW PRODUCT
       product = await Product.create(productData);
       console.log(`🆕 Created new product: ${product.title}`);
+    }
+
+    // ✅ UPDATE STATUS TO 'active' SINCE PRODUCT WAS SUCCESSFULLY PROCESSED
+    if (importProduct) {
+      await importProduct.update({
+        status: "active",
+        lastUpdated: new Date(),
+        mainProductId: product.id,
+      });
+      console.log(
+        `✅ Updated ${productCode} status to ACTIVE in ProductForImport`
+      );
     }
 
     // ✅ PROCESS PDF DOCUMENTS FROM MULTIMEDIA
@@ -1574,6 +1979,50 @@ exports.importProduct = async (req, res) => {
       "❌ Error importing/updating product:",
       error.response?.data || error.message
     );
+
+    // ✅ Handle 404 errors specifically
+    if (error.response?.status === 404) {
+      // Find and update the product in ProductForImport table
+      const importProduct = await ProductForImport.findOne({
+        where: {
+          sku: req.body.productCode,
+          brand: req.body.brand,
+        },
+      });
+
+      if (importProduct) {
+        await importProduct.update({
+          status: "pending",
+          lastUpdated: new Date(),
+          errorMessage: "Product not found in Icecat database (404)",
+        });
+      }
+
+      return res.status(404).json({
+        error: "The requested product is not present in the Icecat database",
+        status: "pending",
+        message: "Product marked as pending for manual review",
+        productCode: req.body.productCode,
+        brand: req.body.brand,
+      });
+    }
+
+    // Handle other errors by setting status to 'pending'
+    const importProduct = await ProductForImport.findOne({
+      where: {
+        sku: req.body.productCode,
+        brand: req.body.brand,
+      },
+    });
+
+    if (importProduct) {
+      await importProduct.update({
+        status: "pending",
+        lastUpdated: new Date(),
+        errorMessage: error.message,
+      });
+    }
+
     res.status(500).json({
       error:
         error.response?.data?.message ||
@@ -2029,5 +2478,53 @@ exports.deleteProduct = async (req, res) => {
     res.json({ message: "Product deleted successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+// ✅ FIXED: Improved subcategory handling
+const ensureSubCategoryExists = async (categoryName, categoryId) => {
+  try {
+    if (!categoryName) {
+      // If no category name provided, create/use default subcategory
+      let defaultSubCategory = await SubCategory.findOne({
+        where: { title: "Uncategorized" },
+      });
+
+      if (!defaultSubCategory) {
+        defaultSubCategory = await SubCategory.create({
+          title: "Uncategorized",
+          parentId: categoryId,
+        });
+      }
+      return defaultSubCategory;
+    }
+
+    let subCategory = await SubCategory.findOne({
+      where: {
+        title: categoryName,
+        parentId: categoryId,
+      },
+    });
+
+    if (!subCategory) {
+      subCategory = await SubCategory.create({
+        title: categoryName,
+        parentId: categoryId,
+      });
+    }
+
+    return subCategory;
+  } catch (error) {
+    console.error("Error ensuring subcategory exists:", error);
+    // Fallback to default subcategory
+    const fallbackSubCategory =
+      (await SubCategory.findOne({
+        where: { title: "Uncategorized" },
+      })) ||
+      (await SubCategory.create({
+        title: "Uncategorized",
+        parentId: categoryId,
+      }));
+    return fallbackSubCategory;
   }
 };

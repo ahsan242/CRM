@@ -33,7 +33,7 @@ const fetchSkusFromExternalAPI = async (distributor, brand) => {
   }
 };
 
-// Import products from external API - FIXED VERSION
+// Import products from external API - FIXED VERSION 
 exports.importFromExternalAPI = async (req, res) => {
   try {
     const { distributor, brand } = req.body;
@@ -451,6 +451,7 @@ exports.getStats = async (req, res) => {
     const totalCount = await ProductForImport.count();
     const activeCount = await ProductForImport.count({ where: { status: 'active' } });
     const inactiveCount = await ProductForImport.count({ where: { status: 'inactive' } });
+    const pendingCount = await ProductForImport.count({ where: { status: 'pending' } }); // NEW: Count pending products
     const manualCount = await ProductForImport.count({ where: { source: 'manual' } });
     const externalCount = await ProductForImport.count({ where: { source: 'external_api' } });
     
@@ -474,6 +475,7 @@ exports.getStats = async (req, res) => {
         total: totalCount,
         active: activeCount,
         inactive: inactiveCount,
+        pending: pendingCount, // NEW: Include pending count in stats
         bySource: {
           manual: manualCount,
           external_api: externalCount
@@ -606,9 +608,9 @@ exports.bulkUpdateStatus = async (req, res) => {
       });
     }
 
-    if (!status || !['active', 'inactive'].includes(status)) {
+    if (!status || !['active', 'inactive','pending'].includes(status)) {
       return res.status(400).json({
-        error: "Valid status (active/inactive) is required"
+        error: "Valid status (active/inactive/pending) is required"
       });
     }
 
@@ -681,9 +683,9 @@ exports.getProductsByStatus = async (req, res) => {
     const offset = (page - 1) * limit;
 
     // Validate status
-    if (!['active', 'inactive'].includes(status)) {
+    if (!['active', 'inactive', 'pending'].includes(status)) {
       return res.status(400).json({
-        error: "Status must be either 'active' or 'inactive'"
+        error: "Status must be either 'active' or 'inactive' or , 'pending'"
       });
     }
 
@@ -730,9 +732,9 @@ exports.getExactCountByStatus = async (req, res) => {
       });
     }
 
-    if (!['active', 'inactive'].includes(status)) {
+    if (!['active', 'inactive', 'pending'].includes(status)) {
       return res.status(400).json({
-        error: "Status must be either 'active' or 'inactive'"
+        error: "Status must be either 'active' or 'inactive' or 'pending' "
       });
     }
 
@@ -778,9 +780,9 @@ exports.getProductsByStatusWithFilters = async (req, res) => {
     const offset = (page - 1) * limit;
 
     // Validate status
-    if (!['active', 'inactive'].includes(status)) {
+    if (!['active', 'inactive', 'pending'].includes(status)) {
       return res.status(400).json({
-        error: "Status must be either 'active' or 'inactive'"
+        error: "Status must be either 'active' or 'inactive' or 'pending'"
       });
     }
 
@@ -832,7 +834,8 @@ exports.getProductsByStatusWithFilters = async (req, res) => {
   }
 };
 
-// Add this to your productForImport controller
+
+// Update product status (including pending)
 exports.updateProductStatus = async (req, res) => {
   try {
     const { sku, brand, status } = req.body;
@@ -840,6 +843,13 @@ exports.updateProductStatus = async (req, res) => {
     if (!sku || !brand || !status) {
       return res.status(400).json({
         error: "SKU, Brand, and Status are required"
+      });
+    }
+
+    // UPDATED: Include 'pending' status in validation
+    if (!['active', 'inactive', 'pending'].includes(status)) {
+      return res.status(400).json({
+        error: "Status must be either 'active', 'inactive', or 'pending'"
       });
     }
 
