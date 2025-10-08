@@ -479,7 +479,7 @@ class ProductImportCron {
   }
 
   setupCron() {
-    // Run every 5 minutes
+    // Run every 15 minutes
     cron.schedule('*/15 * * * *', () => {
       console.log('🕒 Cron job triggered - checking for scheduled jobs...');
       this.processScheduledJobs();
