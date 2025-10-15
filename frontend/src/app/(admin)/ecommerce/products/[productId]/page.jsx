@@ -21,7 +21,7 @@ const ProductDetail = () => {
     })();
   }, [productId]);
   return <>
-      <PageBreadcrumb title="Product Details" subName="Ecommerce" />
+      <PageBreadcrumb title="Product Detailssssss" subName="Ecommerce" />
       <PageMetaData title={product?.name ?? 'Product Details'} />
       <Row>
         <Col>
@@ -38,3 +38,5 @@ const ProductDetail = () => {
     </>;
 };
 export default ProductDetail;
+
+//.... tomorrw check this file for any issues

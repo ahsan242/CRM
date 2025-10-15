@@ -1,13 +1,12 @@
-
 // src/components/ProductsListTable.jsx
-import { useEffect, useState } from "react"
-import clsx from "clsx"
-import { Link } from "react-router-dom"
-import ReactTable from "@/components/Table"
-import IconifyIcon from "@/components/wrappers/IconifyIcon"
-import { currency } from "@/context/constants"
-import { getProducts } from "@/http/Product"
-import { getStockStatus } from "@/utils/other"
+import { useEffect, useState } from 'react'
+import clsx from 'clsx'
+import { Link } from 'react-router-dom'
+import ReactTable from '@/components/Table'
+import IconifyIcon from '@/components/wrappers/IconifyIcon'
+import { currency } from '@/context/constants'
+import { getProducts } from '@/http/Product'
+import { getStockStatus } from '@/utils/other'
 
 const ProductsListTable = () => {
   const [products, setProducts] = useState([])
@@ -19,7 +18,7 @@ const ProductsListTable = () => {
         const data = await getProducts()
         setProducts(data)
       } catch (error) {
-        console.error("Failed to fetch products:", error)
+        console.error('Failed to fetch products:', error)
       } finally {
         setLoading(false)
       }
@@ -29,7 +28,7 @@ const ProductsListTable = () => {
 
   const columns = [
     {
-      header: "Product Name",
+      header: 'Product Name',
       cell: ({
         row: {
           original: { id, title, shortDescp, mainImage },
@@ -38,11 +37,7 @@ const ProductsListTable = () => {
         <div className="d-flex align-items-center">
           <div className="flex-shrink-0 me-3">
             <Link to={`/ecommerce/products/${id}`}>
-              <img
-                src={`http://localhost:5000/uploads/products/${mainImage}`}
-                alt={title}
-                className="img-fluid avatar-sm"
-              />
+              <img src={`http://localhost:5000/uploads/products/${mainImage}`} alt={title} className="img-fluid avatar-sm" />
             </Link>
           </div>
           <div className="flex-grow-1">
@@ -57,15 +52,15 @@ const ProductsListTable = () => {
       ),
     },
     {
-      header: "Category",
-      cell: ({ row: { original } }) => original.category?.title || "-",
+      header: 'Category',
+      cell: ({ row: { original } }) => original.category?.title || '-',
     },
     {
-      header: "Price",
-      cell: ({ row: { original } }) => currency + (original.price || "0.00"),
+      header: 'Price',
+      cell: ({ row: { original } }) => currency + (original.price || '0.00'),
     },
     {
-      header: "Inventory",
+      header: 'Inventory',
       cell: ({
         row: {
           original: { quantity },
@@ -73,29 +68,23 @@ const ProductsListTable = () => {
       }) => {
         const stockStatus = getStockStatus(quantity)
         return (
-          <div className={"text-" + stockStatus.variant}>
-            <IconifyIcon
-              icon="bxs:circle"
-              className={clsx("me-1", "text-" + stockStatus.variant)}
-            />
+          <div className={'text-' + stockStatus.variant}>
+            <IconifyIcon icon="bxs:circle" className={clsx('me-1', 'text-' + stockStatus.variant)} />
             {stockStatus.text}
           </div>
         )
       },
     },
-      {
-    header: 'Action',
-    cell: () => (
-      <>
-        <button type="button" className="btn btn-sm btn-soft-secondary me-1">
-          <IconifyIcon icon="bx:edit" className="fs-18" />
-        </button>
-        <button type="button" className="btn btn-sm btn-soft-danger">
-          <IconifyIcon icon="bx:trash" className="fs-18" />
-        </button>
-      </>
-    ),
-  },
+    {
+      header: 'Action',
+      cell: () => (
+        <>
+          <button type="button" className="btn btn-sm btn-soft-info">
+            <IconifyIcon icon="bx:show" className="fs-18" />
+          </button>
+        </>
+      ),
+    },
   ]
 
   const pageSizeList = [5, 10, 20, 50]
@@ -115,3 +104,6 @@ const ProductsListTable = () => {
 }
 
 export default ProductsListTable
+
+
+//.... tomorrw check this file for any issues

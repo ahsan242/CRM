@@ -1,102 +1,4 @@
-// const { Sequelize } = require("sequelize");
-// const fs = require("fs");
-// const path = require("path");
-// require("dotenv").config();
-
-// // ✅ Setup Sequelize with PostgreSQL
-// const sequelize = new Sequelize(
-//   process.env.DB_NAME,
-//   process.env.DB_USER,
-//   process.env.DB_PASSWORD,
-//   {
-//     host: process.env.DB_HOST,
-//     dialect: "postgres",
-//     port: process.env.DB_PORT || 5432,
-//     logging: process.env.NODE_ENV === 'development' ? console.log : false,
-//     dialectOptions: {
-//       ssl:
-//         process.env.DB_SSL === "true"
-//           ? {
-//               require: true,
-//               rejectUnauthorized: false,
-//             }
-//           : false,
-//     },
-//     pool: {
-//       max: 10,
-//       min: 0,
-//       acquire: 30000,
-//       idle: 10000,
-//     },
-//     retry: {
-//       max: 3
-//     }
-//   }
-// );
-
-// // Object to hold all models
-// const db = {};
-
-// // ✅ Dynamically load all models from ../models
-// const modelsPath = path.join(__dirname, "../models");
-// if (fs.existsSync(modelsPath)) {
-//   fs.readdirSync(modelsPath)
-//     .filter((file) => file.endsWith(".js") && file !== "index.js")
-//     .forEach((file) => {
-//       try {
-//         const modelPath = path.join(modelsPath, file);
-//         const modelDef = require(modelPath);
-
-//         if (typeof modelDef === "function") {
-//           const model = modelDef(sequelize, Sequelize.DataTypes);
-//           db[model.name] = model;
-//           console.log(`✅ Model loaded: ${model.name}`);
-//         }
-//       } catch (error) {
-//         console.error(`❌ Error loading model ${file}:`, error.message);
-//       }
-//     });
-// } else {
-//   console.warn('⚠️ Models directory not found:', modelsPath);
-// }
-
-// // ✅ Apply associations if defined
-// Object.keys(db).forEach((modelName) => {
-//   if (db[modelName].associate) {
-//     db[modelName].associate(db);
-//     console.log(`✅ Associations applied for: ${modelName}`);
-//   }
-// });
-
-// // ✅ Database connection + sync
-// const connectDB = async () => {
-//   try {
-//     await sequelize.authenticate();
-//     console.log("✅ PostgreSQL connected successfully!");
-
-//     // Auto sync models with DB (use alter: true for development, false for production)
-//     const syncOptions = process.env.NODE_ENV === 'production' 
-//       ? { alter: false } 
-//       : { alter: true };
-    
-//     await sequelize.sync(syncOptions);
-//     console.log("✅ All models synchronized successfully.");
-    
-//     return sequelize;
-//   } catch (error) {
-//     console.error("❌ Unable to connect to the database:", error.message);
-//     throw error; // Re-throw to handle in server.js
-//   }
-// };
-
-// // ✅ Export everything properly
-// db.sequelize = sequelize;
-// db.Sequelize = Sequelize;
-// db.connectDB = connectDB;
-
-// module.exports = db;
-
-
+// config/db.js
 const { Sequelize } = require("sequelize");
 const { createProductPriceModel } = require("../models/ProductPrice");
 const fs = require("fs");
@@ -159,6 +61,37 @@ if (fs.existsSync(modelsPath)) {
 } else {
   console.warn('⚠️ Models directory not found:', modelsPath);
 }
+
+// ✅ MANUALLY ADD ORDER MANAGEMENT MODELS (since they're new and might not be in models folder yet)
+try {
+  db.Order = require('../models/Order')(sequelize, Sequelize.DataTypes);
+  console.log('✅ Order model loaded manually');
+} catch (error) {
+  console.error('❌ Error loading Order model:', error.message);
+}
+
+try {
+  db.OrderItem = require('../models/OrderItem')(sequelize, Sequelize.DataTypes);
+  console.log('✅ OrderItem model loaded manually');
+} catch (error) {
+  console.error('❌ Error loading OrderItem model:', error.message);
+}
+
+try {
+  db.OrderHistory = require('../models/OrderHistory')(sequelize, Sequelize.DataTypes);
+  console.log('✅ OrderHistory model loaded manually');
+} catch (error) {
+  console.error('❌ Error loading OrderHistory model:', error.message);
+}
+
+try {
+  db.Cart = require('../models/Cart')(sequelize, Sequelize.DataTypes);
+  console.log('✅ Cart model loaded manually');
+} catch (error) {
+  console.error('❌ Error loading Cart model:', error.message);
+}
+
+console.log('✅ Order management models loaded');
 
 // Store seller-specific models
 db.sellerPriceModels = {};

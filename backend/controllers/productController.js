@@ -112,30 +112,37 @@ const processProductDocuments = async (multimediaData, productId) => {
 // Helper function: Extract and save bullet points from GeneratedBulletPoints
 const processBulletPoints = async (bulletPointsData, productId) => {
   try {
-    if (
-      !bulletPointsData ||
-      !bulletPointsData.Values ||
-      !Array.isArray(bulletPointsData.Values)
-    ) {
-      console.log("❌ No bullet points data found or invalid format");
+    console.log("🔍 Processing bullet points data:", JSON.stringify(bulletPointsData, null, 2));
+    
+    // Check if we have valid bullet points data
+    if (!bulletPointsData || !bulletPointsData.Values || !Array.isArray(bulletPointsData.Values)) {
+      console.log("❌ No valid bullet points data found or invalid format");
       return;
     }
 
-    await ProductBulletPoint.destroy({ where: { productId } });
+    console.log(`📝 Found ${bulletPointsData.Values.length} bullet points to process`);
 
+    // Clean up existing bullet points
+    await ProductBulletPoint.destroy({ where: { productId } });
+    console.log(`🧹 Cleared existing bullet points for product ID: ${productId}`);
+
+    // Process each bullet point
     for (const [index, bulletPoint] of bulletPointsData.Values.entries()) {
-      if (bulletPoint && typeof bulletPoint === "string") {
-        await ProductBulletPoint.create({
-          point: bulletPoint.trim(),
-          orderIndex: index,
-          productId: productId,
-        });
+      if (bulletPoint && typeof bulletPoint === "string" && bulletPoint.trim()) {
+        try {
+          await ProductBulletPoint.create({
+            point: bulletPoint.trim(),
+            orderIndex: index,
+            productId: productId,
+          });
+          console.log(`✅ Saved bullet point ${index + 1}: ${bulletPoint.trim()}`);
+        } catch (createError) {
+          console.error(`❌ Error creating bullet point ${index + 1}:`, createError);
+        }
       }
     }
 
-    console.log(
-      `✅ ${bulletPointsData.Values.length} bullet points saved for product ID: ${productId}`
-    );
+    console.log(`✅ Successfully processed ${bulletPointsData.Values.length} bullet points for product ID: ${productId}`);
   } catch (error) {
     console.error("❌ Error processing bullet points:", error);
   }
@@ -350,6 +357,7 @@ const processAdditionalProductData = async (
       await processProductDocuments(multimediaData, productId);
     }
 
+    // FIXED: Pass the entire GeneratedBulletPoints object, not just Values
     const generatedBulletPoints = icecatData.data?.GeneratedBulletPoints;
     if (generatedBulletPoints) {
       await processBulletPoints(generatedBulletPoints, productId);
@@ -623,6 +631,9 @@ const processSingleProduct = async (
       brandId: brandRecord.id,
       categoryId: category.id, // ✅ Now guaranteed to be valid
       subCategoryId: subCategory.id, // ✅ Now guaranteed to be valid
+      bulletsPoint: Array.isArray(generalInfo?.GeneratedBulletPoints?.Values) 
+        ? generalInfo.GeneratedBulletPoints.Values 
+        : [],
     };
 
     // ✅ SUCCESS CASE: Create/Update product and set status to active
@@ -1430,7 +1441,13 @@ exports.importProduct = async (req, res) => {
       brandId: brandRecord.id,
       categoryId: category.id,
       subCategoryId: subCategory.id,
+      bulletsPoint: Array.isArray(generalInfo?.GeneratedBulletPoints?.Values) 
+        ? generalInfo.GeneratedBulletPoints.Values 
+        : [],
     };
+
+    console.log("🔍 GeneratedBulletPoints:", generalInfo?.GeneratedBulletPoints);
+    console.log("🔍 Values:", generalInfo?.GeneratedBulletPoints?.Values);
 
     if (existingProduct) {
       // ✅ UPDATE EXISTING PRODUCT
@@ -1473,7 +1490,7 @@ exports.importProduct = async (req, res) => {
     // ✅ PROCESS BULLET POINTS FROM GeneratedBulletPoints
     const generatedBulletPoints = response.data.data?.GeneratedBulletPoints;
     if (generatedBulletPoints) {
-      await processBulletPoints(generatedBulletPoints, product.id);
+        await processBulletPoints(generatedBulletPoints, product.id);
     }
 
     // Process gallery images
@@ -1550,6 +1567,8 @@ exports.importProduct = async (req, res) => {
     } catch (error) {
       console.error("❌ Error processing Icecat data:", error);
     }
+
+    await processAdditionalProductData(response.data, product.id, productCode);
 
     res.status(201).json({
       message: isUpdate
@@ -1851,6 +1870,14 @@ exports.getimportsProducts = async (req, res) => {
       include: [
         { model: Brand, as: "brand" },
         { model: Category, as: "category" },
+        { model: SubCategory, as: "subCategory" },
+        { model: Image, as: "images" },
+        { model: db.ProductDocument, as: "documents" },
+        {
+          model: db.ProductBulletPoint,
+          as: "bulletPoints",
+          order: [["orderIndex", "ASC"]],
+        },
       ],
       order: [["id", "DESC"]],
     });
@@ -2000,82 +2027,6 @@ exports.getProduct = async (req, res) => {
   }
 };
 
-exports.updateProduct = async (req, res) => {
-  try {
-    uploadFiles(req, res, async (err) => {
-      if (err) {
-        return res.status(400).json({ error: err.message });
-      }
-
-      try {
-        const product = await Product.findByPk(req.params.id);
-        if (!product)
-          return res.status(404).json({ error: "Product not found" });
-
-        const updateData = { ...req.body };
-
-        // Handle numeric fields
-        if (updateData.price) updateData.price = parseFloat(updateData.price);
-        if (updateData.quantity)
-          updateData.quantity = parseInt(updateData.quantity);
-
-        // Handle main image update
-        if (req.files?.mainImage) {
-          updateData.mainImage = req.files.mainImage[0].filename;
-        }
-
-        await product.update(updateData);
-
-        // Handle detail images update
-        if (req.files?.detailImages) {
-          // First, remove existing images
-          await Image.destroy({ where: { productId: product.id } });
-
-          // Add new images
-          const imagePromises = req.files.detailImages.map(async (file) => {
-            await Image.create({
-              imageTitle: file.originalname,
-              url: file.filename,
-              productId: product.id,
-            });
-          });
-          await Promise.all(imagePromises);
-        }
-
-        const updatedProduct = await Product.findByPk(req.params.id, {
-          include: [
-            { model: Brand, as: "brand" },
-            { model: Category, as: "category" },
-            { model: SubCategory, as: "subCategory" },
-            { model: Image, as: "images" },
-          ],
-        });
-
-        res.json(updatedProduct);
-      } catch (error) {
-        res.status(500).json({ error: error.message });
-      }
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
-
-exports.deleteProduct = async (req, res) => {
-  try {
-    const product = await Product.findByPk(req.params.id);
-    if (!product) return res.status(404).json({ error: "Product not found" });
-
-    // Delete associated images
-    await Image.destroy({ where: { productId: product.id } });
-
-    await product.destroy();
-    res.json({ message: "Product deleted successfully" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
-
 // ✅ FIXED: Improved subcategory handling
 const ensureSubCategoryExists = async (categoryName, categoryId) => {
   try {
@@ -2125,92 +2076,6 @@ const ensureSubCategoryExists = async (categoryName, categoryId) => {
 };
 
 // ===== PRODUCT FILTERING FUNCTIONS =====
-
-// Filter products by brand and/or category
-// exports.filterProducts = async (req, res) => {
-//   try {
-//     const { brands, categories, page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'DESC' } = req.query;
-    
-//     // Build where clause
-//     const whereClause = {};
-    
-//     // Filter by brands if provided
-//     if (brands) {
-//       const brandArray = Array.isArray(brands) ? brands : brands.split(',');
-//       whereClause.brandId = {
-//         [Op.in]: await getBrandIds(brandArray)
-//       };
-//     }
-    
-//     // Filter by categories if provided
-//     if (categories) {
-//       const categoryArray = Array.isArray(categories) ? categories : categories.split(',');
-//       whereClause.categoryId = {
-//         [Op.in]: await getCategoryIds(categoryArray)
-//       };
-//     }
-
-//     // Calculate pagination
-//     const offset = (page - 1) * limit;
-    
-//     // Validate sort parameters
-//     const validSortFields = ['title', 'price', 'createdAt', 'updatedAt'];
-//     const validSortOrders = ['ASC', 'DESC'];
-    
-//     const finalSortBy = validSortFields.includes(sortBy) ? sortBy : 'createdAt';
-//     const finalSortOrder = validSortOrders.includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : 'DESC';
-
-//     // Execute query with pagination
-//     const { count, rows: products } = await Product.findAndCountAll({
-//       where: whereClause,
-//       include: [
-//         { 
-//           model: Brand
-//         },
-//         { 
-//           model: Category
-//         },
-//         { 
-//           model: SubCategory
-//         },
-//         { 
-//           model: Image
-//         }
-//       ],
-//       order: [[finalSortBy, finalSortOrder]],
-//       limit: parseInt(limit),
-//       offset: parseInt(offset),
-//       distinct: true
-//     });
-
-//     // Prepare response
-//     const response = {
-//       success: true,
-//       data: products,
-//       pagination: {
-//         page: parseInt(page),
-//         limit: parseInt(limit),
-//         total: count,
-//         pages: Math.ceil(count / limit)
-//       },
-//       filters: {
-//         brands: brands || 'all',
-//         categories: categories || 'all',
-//         sortBy: finalSortBy,
-//         sortOrder: finalSortOrder
-//       }
-//     };
-
-//     res.status(200).json(response);
-
-//   } catch (error) {
-//     console.error('Error filtering products:', error);
-//     res.status(500).json({
-//       success: false,
-//       error: error.message || 'Failed to filter products'
-//     });
-//   }
-// };
 
 // Get available brands for filtering
 exports.getFilterBrands = async (req, res) => {
@@ -2453,9 +2318,6 @@ const getCategoryIds = async (categoryNames) => {
     return [];
   }
 };
-
-
-//......... new code ........
 
 // ===== ENHANCED PRODUCT FILTERING =====
 
