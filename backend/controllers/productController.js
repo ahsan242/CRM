@@ -231,6 +231,65 @@ const downloadImage = async (url, filename) => {
   }
 };
 
+// Enhanced Helper function: Process gallery images with Pic500x500
+const processGalleryImages = async (galleryData, productId, productCode) => {
+  try {
+    if (!galleryData || !Array.isArray(galleryData)) {
+      console.log("❌ No gallery data found or invalid format");
+      return;
+    }
+
+    console.log(`🖼️ Found ${galleryData.length} gallery images to process`);
+
+    // Filter only images that have Pic500x500
+    const validGalleryImages = galleryData.filter(img => img.Pic500x500);
+    console.log(`📸 ${validGalleryImages.length} images have Pic500x500 URLs`);
+
+    // Process each gallery image
+    for (const [index, img] of validGalleryImages.entries()) {
+      try {
+        const imgUrl = img.Pic500x500;
+        if (!imgUrl) continue;
+
+        console.log(`🖼️ Processing gallery image ${index + 1}: ${imgUrl}`);
+
+        const timestamp = Date.now();
+        const imageExt = path.extname(imgUrl.split('?')[0]) || ".jpg";
+        const galleryImageFilename = `icecat_${productCode}_gallery_${index + 1}_${timestamp}${imageExt}`;
+
+        console.log(`📁 Downloading: ${galleryImageFilename}`);
+        
+        const downloadedFilename = await downloadImage(imgUrl, galleryImageFilename);
+
+        if (downloadedFilename) {
+          // Create image record in database
+          await Image.create({
+            imageTitle: `Gallery Image ${index + 1}`,
+            url: downloadedFilename,
+            productId: productId,
+            isMain: img.IsMain === 'Y', // Mark as main if IsMain is 'Y'
+            orderIndex: index,
+            originalUrl: imgUrl // Store original URL for reference
+          });
+          
+          console.log(`✅ Gallery image ${index + 1} saved: ${downloadedFilename}`);
+          if (img.IsMain === 'Y') {
+            console.log(`⭐ This image is marked as main image in gallery`);
+          }
+        } else {
+          console.log(`❌ Failed to download gallery image ${index + 1}`);
+        }
+      } catch (imgError) {
+        console.error(`❌ Error processing gallery image ${index + 1}:`, imgError.message);
+      }
+    }
+
+    console.log(`✅ Successfully processed ${validGalleryImages.length} gallery images for product ID: ${productId}`);
+  } catch (error) {
+    console.error("❌ Error processing gallery images:", error);
+  }
+};
+
 // Helper function: Extract UPC from Icecat response
 const extractUPC = (icecatData) => {
   try {
@@ -346,6 +405,97 @@ const cleanupProductAssets = async (productId) => {
 };
 
 // Helper function to process additional product data
+// const processAdditionalProductData = async (
+//   icecatData,
+//   productId,
+//   productCode
+// ) => {
+//   try {
+//     const multimediaData = icecatData.data?.Multimedia;
+//     if (multimediaData) {
+//       await processProductDocuments(multimediaData, productId);
+//     }
+
+//     // FIXED: Pass the entire GeneratedBulletPoints object, not just Values
+//     const generatedBulletPoints = icecatData.data?.GeneratedBulletPoints;
+//     if (generatedBulletPoints) {
+//       await processBulletPoints(generatedBulletPoints, productId);
+//     }
+
+//     const gallery = icecatData.data?.Gallery;
+//     if (gallery && Array.isArray(gallery)) {
+//       for (const [index, img] of gallery.entries()) {
+//         const imgUrl = img.Pic500x500 || img.Pic || img.LowPic;
+//         if (!imgUrl) continue;
+
+//         const timestamp = Date.now();
+//         const imageExt = path.extname(imgUrl) || ".jpg";
+//         const galleryImageFilename = `icecat_${productCode}_gallery_${index}_${timestamp}${imageExt}`;
+
+//         const downloadedFilename = await downloadImage(
+//           imgUrl,
+//           galleryImageFilename
+//         );
+
+//         if (downloadedFilename) {
+//           await Image.create({
+//             imageTitle: `Image ${index + 1}`,
+//             url: galleryImageFilename,
+//             productId: productId,
+//           });
+//         }
+//       }
+//     }
+
+//     const featuresGroups = icecatData.data?.FeaturesGroups;
+//     if (featuresGroups) {
+//       for (const group of featuresGroups) {
+//         let techSpecGroup = await TechSpecGroup.findOne({
+//           where: { title: group.FeatureGroup?.Name?.Value },
+//         });
+
+//         if (!techSpecGroup) {
+//           techSpecGroup = await TechSpecGroup.create({
+//             title: group.FeatureGroup?.Name?.Value || "General",
+//           });
+//         }
+
+//         for (const feature of group.Features || []) {
+//           let techProductName = await TechProductName.findOne({
+//             where: { title: feature.Feature?.Name?.Value },
+//           });
+
+//           if (!techProductName) {
+//             techProductName = await TechProductName.create({
+//               title: feature.Feature?.Name?.Value || "Unknown",
+//             });
+//           }
+
+//           await TechProduct.create({
+//             specId: techProductName.id,
+//             value:
+//               feature.PresentationValue ||
+//               feature.RawValue ||
+//               feature.Value ||
+//               "",
+//             techspecgroupId: techSpecGroup.id,
+//             productId: productId,
+//           });
+//         }
+//       }
+//     }
+
+//     console.log(`✅ Processed additional data for product ID: ${productId}`);
+//   } catch (error) {
+//     console.error(
+//       `❌ Error processing additional data for product ${productId}:`,
+//       error
+//     );
+//   }
+// };
+
+// Improved Helper function to process additional product data
+// Helper function to process additional product data
 const processAdditionalProductData = async (
   icecatData,
   productId,
@@ -357,35 +507,16 @@ const processAdditionalProductData = async (
       await processProductDocuments(multimediaData, productId);
     }
 
-    // FIXED: Pass the entire GeneratedBulletPoints object, not just Values
+    // Process bullet points
     const generatedBulletPoints = icecatData.data?.GeneratedBulletPoints;
     if (generatedBulletPoints) {
       await processBulletPoints(generatedBulletPoints, productId);
     }
 
+    // Process gallery images with enhanced function
     const gallery = icecatData.data?.Gallery;
-    if (gallery && Array.isArray(gallery)) {
-      for (const [index, img] of gallery.entries()) {
-        const imgUrl = img.Pic500x500 || img.Pic || img.LowPic;
-        if (!imgUrl) continue;
-
-        const timestamp = Date.now();
-        const imageExt = path.extname(imgUrl) || ".jpg";
-        const galleryImageFilename = `icecat_${productCode}_gallery_${index}_${timestamp}${imageExt}`;
-
-        const downloadedFilename = await downloadImage(
-          imgUrl,
-          galleryImageFilename
-        );
-
-        if (downloadedFilename) {
-          await Image.create({
-            imageTitle: `Image ${index + 1}`,
-            url: galleryImageFilename,
-            productId: productId,
-          });
-        }
-      }
+    if (gallery) {
+      await processGalleryImages(gallery, productId, productCode);
     }
 
     const featuresGroups = icecatData.data?.FeaturesGroups;
