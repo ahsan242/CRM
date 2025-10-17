@@ -127,6 +127,10 @@ module.exports = (sequelize) => {
         foreignKey: "productId",
         as: "bulletPoints",
     });
+    Product.hasMany(models.Gallery, {
+    foreignKey: "productId",
+    as: "galleries",
+  });
   };
 
   // Method to reduce product quantity

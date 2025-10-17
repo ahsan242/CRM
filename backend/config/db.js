@@ -70,6 +70,14 @@ try {
   console.error('❌ Error loading Order model:', error.message);
 }
 
+// ✅ MANUALLY ADD GALLERY MODEL
+try {
+  db.Gallery = require('../models/Gallery')(sequelize, Sequelize.DataTypes);
+  console.log('✅ Gallery model loaded manually');
+} catch (error) {
+  console.error('❌ Error loading Gallery model:', error.message);
+}
+
 try {
   db.OrderItem = require('../models/OrderItem')(sequelize, Sequelize.DataTypes);
   console.log('✅ OrderItem model loaded manually');
