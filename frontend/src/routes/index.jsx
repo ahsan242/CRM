@@ -159,6 +159,7 @@ const appsRoutes = [{
   name: 'Product Details',
   path: '/ecommerce/products/:productId',
   element: <EcommerceProductDetails />
+  // element: <ProductDetail />
 },
 {
   name: 'Create Brand',

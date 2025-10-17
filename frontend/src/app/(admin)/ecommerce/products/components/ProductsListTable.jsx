@@ -75,16 +75,30 @@ const ProductsListTable = () => {
         )
       },
     },
+    // {
+    //   header: 'Action',
+    //   cell: () => (
+    //     <>
+    //       <button type="button" className="btn btn-sm btn-soft-info">
+    //         <IconifyIcon icon="bx:show" className="fs-18" />
+    //       </button>
+    //     </>
+    //   ),
+    // }
     {
-      header: 'Action',
-      cell: () => (
-        <>
-          <button type="button" className="btn btn-sm btn-soft-info">
-            <IconifyIcon icon="bx:show" className="fs-18" />
-          </button>
-        </>
-      ),
-    },
+  header: 'Action',
+  cell: ({ row: { original } }) => (
+    <>
+      <Link 
+        to={`/ecommerce/products/${original.id}`}
+        className="btn btn-sm btn-soft-info"
+      >
+        <IconifyIcon icon="bx:show" className="fs-18" />
+      </Link>
+    </>
+  ),
+}
+    ,
   ]
 
   const pageSizeList = [5, 10, 20, 50]
@@ -106,4 +120,4 @@ const ProductsListTable = () => {
 export default ProductsListTable
 
 
-//.... tomorrw check this file for any issues
+//.... tomorrw check this
