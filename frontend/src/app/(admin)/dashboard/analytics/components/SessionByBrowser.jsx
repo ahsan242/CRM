@@ -1,9 +1,10 @@
-import IconifyIcon from '@/components/wrappers/IconifyIcon';
-import { browsers } from '../data';
-import { Card, CardBody, CardHeader, CardTitle, Dropdown, DropdownItem, DropdownMenu, DropdownToggle } from 'react-bootstrap';
-import SimplebarReactClient from '@/components/wrappers/SimplebarReactClient';
+import IconifyIcon from '@/components/wrappers/IconifyIcon'
+import { browsers } from '../data'
+import { Card, CardBody, CardHeader, CardTitle, Dropdown, DropdownItem, DropdownMenu, DropdownToggle } from 'react-bootstrap'
+import SimplebarReactClient from '@/components/wrappers/SimplebarReactClient'
 const SessionByBrowser = () => {
-  return <Card>
+  return (
+    <Card>
       <CardHeader className="d-flex justify-content-between align-items-center border-bottom border-dashed">
         <CardTitle>Session By Browser </CardTitle>
         <Dropdown>
@@ -20,16 +21,21 @@ const SessionByBrowser = () => {
         </Dropdown>
       </CardHeader>
       <CardBody className="py-2 px-0">
-        <SimplebarReactClient className="px-2" style={{
-        height: 270
-      }}>
-          {browsers.map((browser, idx) => <div className="d-flex justify-content-between align-items-center p-2" key={idx}>
+        <SimplebarReactClient
+          className="px-2"
+          style={{
+            height: 270,
+          }}>
+          {browsers.map((browser, idx) => (
+            <div className="d-flex justify-content-between align-items-center p-2" key={idx}>
               <span className="align-middle fw-medium">{browser.name}</span>
               <span className="fw-semibold text-muted">{browser.percentage}%</span>
               <span className="fw-semibold text-muted">{browser.amount}k</span>
-            </div>)}
+            </div>
+          ))}
         </SimplebarReactClient>
       </CardBody>
-    </Card>;
-};
-export default SessionByBrowser;
+    </Card>
+  )
+}
+export default SessionByBrowser

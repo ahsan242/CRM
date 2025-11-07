@@ -14,7 +14,7 @@ const sequelize = new Sequelize(
     host: process.env.DB_HOST,
     dialect: "postgres",
     port: process.env.DB_PORT || 5432,
-    logging: process.env.NODE_ENV === 'development' ? console.log : false,
+    logging: process.env.NODE_ENV === "development" ? console.log : false,
     dialectOptions: {
       ssl:
         process.env.DB_SSL === "true"
@@ -31,8 +31,8 @@ const sequelize = new Sequelize(
       idle: 10000,
     },
     retry: {
-      max: 3
-    }
+      max: 3,
+    },
   }
 );
 
@@ -59,69 +59,138 @@ if (fs.existsSync(modelsPath)) {
       }
     });
 } else {
-  console.warn('⚠️ Models directory not found:', modelsPath);
+  console.warn("⚠️ Models directory not found:", modelsPath);
 }
 
 // ✅ MANUALLY ADD ORDER MANAGEMENT MODELS (since they're new and might not be in models folder yet)
 try {
-  db.Order = require('../models/Order')(sequelize, Sequelize.DataTypes);
-  console.log('✅ Order model loaded manually');
+  db.Order = require("../models/Order")(sequelize, Sequelize.DataTypes);
+  console.log("✅ Order model loaded manually");
 } catch (error) {
-  console.error('❌ Error loading Order model:', error.message);
+  console.error("❌ Error loading Order model:", error.message);
 }
 
 // ✅ MANUALLY ADD GALLERY MODEL
 try {
-  db.Gallery = require('../models/Gallery')(sequelize, Sequelize.DataTypes);
-  console.log('✅ Gallery model loaded manually');
+  db.Gallery = require("../models/Gallery")(sequelize, Sequelize.DataTypes);
+  console.log("✅ Gallery model loaded manually");
 } catch (error) {
-  console.error('❌ Error loading Gallery model:', error.message);
+  console.error("❌ Error loading Gallery model:", error.message);
+}
+
+// ✅ MANUALLY ADD EMAIL VERIFICATION MODEL
+try {
+  db.EmailVerification = require("../models/EmailVerification")(
+    sequelize,
+    Sequelize.DataTypes
+  );
+  console.log("✅ EmailVerification model loaded manually");
+} catch (error) {
+  console.error("❌ Error loading EmailVerification model:", error.message);
 }
 
 try {
-  db.OrderItem = require('../models/OrderItem')(sequelize, Sequelize.DataTypes);
-  console.log('✅ OrderItem model loaded manually');
+  db.OrderItem = require("../models/OrderItem")(sequelize, Sequelize.DataTypes);
+  console.log("✅ OrderItem model loaded manually");
 } catch (error) {
-  console.error('❌ Error loading OrderItem model:', error.message);
+  console.error("❌ Error loading OrderItem model:", error.message);
 }
 
 try {
-  db.OrderHistory = require('../models/OrderHistory')(sequelize, Sequelize.DataTypes);
-  console.log('✅ OrderHistory model loaded manually');
+  db.OrderHistory = require("../models/OrderHistory")(
+    sequelize,
+    Sequelize.DataTypes
+  );
+  console.log("✅ OrderHistory model loaded manually");
 } catch (error) {
-  console.error('❌ Error loading OrderHistory model:', error.message);
+  console.error("❌ Error loading OrderHistory model:", error.message);
 }
 
 try {
-  db.Cart = require('../models/Cart')(sequelize, Sequelize.DataTypes);
-  console.log('✅ Cart model loaded manually');
+  db.Cart = require("../models/Cart")(sequelize, Sequelize.DataTypes);
+  console.log("✅ Cart model loaded manually");
 } catch (error) {
-  console.error('❌ Error loading Cart model:', error.message);
+  console.error("❌ Error loading Cart model:", error.message);
 }
 
-console.log('✅ Order management models loaded');
+// ✅ MANUALLY ADD USER PROFILE MODEL
+try {
+  db.UserProfile = require("../models/UserProfile")(
+    sequelize,
+    Sequelize.DataTypes
+  );
+  console.log("✅ UserProfile model loaded manually");
+} catch (error) {
+  console.error("❌ Error loading UserProfile model:", error.message);
+}
+
+// ✅ MANUALLY ADD EMAIL VERIFICATION MODEL
+try {
+  db.EmailVerification = require("../models/EmailVerification")(
+    sequelize,
+    Sequelize.DataTypes
+  );
+  console.log("✅ EmailVerification model loaded manually");
+} catch (error) {
+  console.error("❌ Error loading EmailVerification model:", error.message);
+}
+
+// ✅ MANUALLY ADD ORDER HISTORY MODEL
+try {
+  db.OrderHistory = require("../models/OrderHistory")(
+    sequelize,
+    Sequelize.DataTypes
+  );
+  console.log("✅ OrderHistory model loaded manually");
+} catch (error) {
+  console.error("❌ Error loading OrderHistory model:", error.message);
+}
+
+// ✅ MANUALLY ADD ORDER ITEM MODEL
+try {
+  db.OrderItem = require("../models/OrderItem")(sequelize, Sequelize.DataTypes);
+  console.log("✅ OrderItem model loaded manually");
+} catch (error) {
+  console.error("❌ Error loading OrderItem model:", error.message);
+}
+
+// ✅ MANUALLY ADD USER PROFILE MODEL
+try {
+  db.UserProfile = require("../models/UserProfile")(
+    sequelize,
+    Sequelize.DataTypes
+  );
+  console.log("✅ UserProfile model loaded manually");
+} catch (error) {
+  console.error("❌ Error loading UserProfile model:", error.message);
+}
+
+console.log("✅ Order management models loaded");
 
 // Store seller-specific models
 db.sellerPriceModels = {};
 
 // Function to get or create seller-specific price model
 db.getSellerPriceModel = async (sellerName) => {
-  const normalizedSellerName = sellerName.replace(/[^a-zA-Z0-9_]/g, '_');
-  
+  const normalizedSellerName = sellerName.replace(/[^a-zA-Z0-9_]/g, "_");
+
   if (!db.sellerPriceModels[normalizedSellerName]) {
     console.log(`🆕 Creating price model for seller: ${normalizedSellerName}`);
-    db.sellerPriceModels[normalizedSellerName] = createProductPriceModel(sequelize, normalizedSellerName);
-    
+    db.sellerPriceModels[normalizedSellerName] = createProductPriceModel(
+      sequelize,
+      normalizedSellerName
+    );
+
     // Apply associations
     if (db.sellerPriceModels[normalizedSellerName].associate) {
       db.sellerPriceModels[normalizedSellerName].associate(db);
     }
-    
+
     // Sync the table
     await db.sellerPriceModels[normalizedSellerName].sync();
     console.log(`✅ Price table created for seller: ${normalizedSellerName}`);
   }
-  
+
   return db.sellerPriceModels[normalizedSellerName];
 };
 
@@ -134,9 +203,9 @@ db.getAllSellerTables = async () => {
       WHERE table_schema = 'public' 
       AND table_name LIKE 'product_prices_%'
     `);
-    return results.map(row => row.table_name);
+    return results.map((row) => row.table_name);
   } catch (error) {
-    console.error('Error fetching seller tables:', error);
+    console.error("Error fetching seller tables:", error);
     return [];
   }
 };
@@ -146,15 +215,15 @@ db.getAllSellers = async () => {
   try {
     const sellerTables = await db.getAllSellerTables();
     const allSellers = new Set();
-    
+
     for (const table of sellerTables) {
-      const sellerName = table.replace('product_prices_', '');
+      const sellerName = table.replace("product_prices_", "");
       allSellers.add(sellerName);
     }
-    
+
     return Array.from(allSellers);
   } catch (error) {
-    console.error('Error fetching all sellers:', error);
+    console.error("Error fetching all sellers:", error);
     return [];
   }
 };
@@ -192,13 +261,14 @@ const connectDB = async () => {
     console.log("✅ PostgreSQL connected successfully!");
 
     // Auto sync models with DB (use alter: true for development, false for production)
-    const syncOptions = process.env.NODE_ENV === 'production' 
-      ? { alter: false } 
-      : { alter: true };
-    
+    const syncOptions =
+      process.env.NODE_ENV === "production"
+        ? { alter: false }
+        : { alter: true };
+
     await sequelize.sync(syncOptions);
     console.log("✅ All models synchronized successfully.");
-    
+
     return sequelize;
   } catch (error) {
     console.error("❌ Unable to connect to the database:", error.message);

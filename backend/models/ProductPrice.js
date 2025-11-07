@@ -60,6 +60,8 @@
 
 //   return ProductPrice;
 // };
+
+
 const { DataTypes } = require("sequelize");
 
 // Factory function to create ProductPrice model for a specific seller

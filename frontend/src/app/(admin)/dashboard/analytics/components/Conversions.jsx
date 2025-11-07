@@ -185,6 +185,8 @@ const Conversions = () => {
   return <Card>
       <CardBody className="p-0">
         <Row className="g-0">
+
+          {/* Conversions block */}
           <Col lg={4}>
             <div className="p-3 d-flex flex-column justify-content-between h-100">
               <CardTitle as={'h5'}>Conversions</CardTitle>
@@ -206,6 +208,7 @@ const Conversions = () => {
               </div>
             </div>
           </Col>
+          {/* Performance block */}
           <Col lg={8} className="border-start">
             <div className="p-3">
               <div className="d-flex justify-content-between align-items-center">
