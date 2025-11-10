@@ -165,6 +165,35 @@ try {
   console.error("❌ Error loading UserProfile model:", error.message);
 }
 
+// Add these to your existing db.js file in the models loading section
+
+try {
+  db.Invoice = require("../models/Invoice")(sequelize, Sequelize.DataTypes);
+  console.log("✅ Invoice model loaded manually");
+} catch (error) {
+  console.error("❌ Error loading Invoice model:", error.message);
+}
+
+try {
+  db.SalesAnalytics = require("../models/SalesAnalytics")(
+    sequelize,
+    Sequelize.DataTypes
+  );
+  console.log("✅ SalesAnalytics model loaded manually");
+} catch (error) {
+  console.error("❌ Error loading SalesAnalytics model:", error.message);
+}
+
+try {
+  db.FinancialReport = require("../models/FinancialReport")(
+    sequelize,
+    Sequelize.DataTypes
+  );
+  console.log("✅ FinancialReport model loaded manually");
+} catch (error) {
+  console.error("❌ Error loading FinancialReport model:", error.message);
+}
+
 console.log("✅ Order management models loaded");
 
 // Store seller-specific models

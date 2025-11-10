@@ -1,4 +1,4 @@
-// // // backend/models/OrderItem.js
+
 // const { DataTypes } = require("sequelize");
 
 // module.exports = (sequelize) => {
@@ -18,6 +18,18 @@
 //         type: DataTypes.INTEGER,
 //         allowNull: false,
 //       },
+//       productName: {
+//         type: DataTypes.STRING,
+//         allowNull: false,
+//       },
+//       productSku: {
+//         type: DataTypes.STRING,
+//         allowNull: false,
+//       },
+//       productImage: {
+//         type: DataTypes.STRING,
+//         allowNull: true,
+//       },
 //       quantity: {
 //         type: DataTypes.INTEGER,
 //         allowNull: false,
@@ -36,6 +48,10 @@
 //       sellerName: {
 //         type: DataTypes.STRING,
 //         allowNull: true,
+//       },
+//       status: {
+//         type: DataTypes.ENUM('pending', 'shipped', 'delivered', 'cancelled'),
+//         defaultValue: 'pending'
 //       },
 //     },
 //     {
@@ -114,13 +130,44 @@ module.exports = (sequelize) => {
         allowNull: true,
       },
       status: {
-        type: DataTypes.ENUM('pending', 'shipped', 'delivered', 'cancelled'),
+        type: DataTypes.ENUM('pending', 'shipped', 'delivered', 'cancelled', 'returned'),
         defaultValue: 'pending'
+      },
+      // New fields for analytics
+      costPrice: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+      },
+      profit: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+      },
+      taxAmount: {
+        type: DataTypes.DECIMAL(10, 2),
+        defaultValue: 0.0,
+      },
+      discountAmount: {
+        type: DataTypes.DECIMAL(10, 2),
+        defaultValue: 0.0,
       },
     },
     {
       tableName: "order_items",
       timestamps: true,
+      indexes: [
+        {
+          fields: ['orderId']
+        },
+        {
+          fields: ['productId']
+        },
+        {
+          fields: ['productSku']
+        },
+        {
+          fields: ['status']
+        }
+      ]
     }
   );
 
@@ -135,9 +182,14 @@ module.exports = (sequelize) => {
     });
   };
 
-  // Calculate total price before create/update
+  // Calculate total price and profit before create/update
   OrderItem.beforeSave((orderItem) => {
     orderItem.totalPrice = orderItem.quantity * orderItem.unitPrice;
+    
+    // Calculate profit if cost price is available
+    if (orderItem.costPrice) {
+      orderItem.profit = (orderItem.unitPrice - orderItem.costPrice) * orderItem.quantity;
+    }
   });
 
   return OrderItem;

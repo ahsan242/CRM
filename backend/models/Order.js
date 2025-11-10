@@ -1,4 +1,3 @@
-// // // backend/models/Order.js
 // const { DataTypes } = require("sequelize");
 
 // module.exports = (sequelize) => {
@@ -22,6 +21,23 @@
 //       totalAmount: {
 //         type: DataTypes.DECIMAL(10, 2),
 //         allowNull: false,
+//         defaultValue: 0.0,
+//       },
+//       subtotal: {
+//         type: DataTypes.DECIMAL(10, 2),
+//         allowNull: false,
+//         defaultValue: 0.0,
+//       },
+//       taxAmount: {
+//         type: DataTypes.DECIMAL(10, 2),
+//         defaultValue: 0.0,
+//       },
+//       shippingAmount: {
+//         type: DataTypes.DECIMAL(10, 2),
+//         defaultValue: 0.0,
+//       },
+//       discountAmount: {
+//         type: DataTypes.DECIMAL(10, 2),
 //         defaultValue: 0.0,
 //       },
 //       status: {
@@ -49,8 +65,12 @@
 //         allowNull: false,
 //       },
 //       paymentStatus: {
-//         type: DataTypes.ENUM('pending', 'paid', 'failed', 'refunded'),
+//         type: DataTypes.ENUM('pending', 'paid', 'failed', 'refunded', 'partially_refunded'),
 //         defaultValue: 'pending',
+//       },
+//       paymentIntentId: {
+//         type: DataTypes.STRING,
+//         allowNull: true,
 //       },
 //       shippingMethod: {
 //         type: DataTypes.STRING,
@@ -62,6 +82,10 @@
 //       },
 //       notes: {
 //         type: DataTypes.TEXT,
+//         allowNull: true,
+//       },
+//       estimatedDelivery: {
+//         type: DataTypes.DATE,
 //         allowNull: true,
 //       },
 //     },
@@ -188,10 +212,56 @@ module.exports = (sequelize) => {
         type: DataTypes.DATE,
         allowNull: true,
       },
+      // New fields for billing and analytics
+      orderDate: {
+        type: DataTypes.DATE,
+        defaultValue: DataTypes.NOW,
+      },
+      completedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      taxRate: {
+        type: DataTypes.DECIMAL(5, 2),
+        defaultValue: 0.0,
+      },
+      currency: {
+        type: DataTypes.STRING(3),
+        defaultValue: 'USD',
+      },
+      customerNotes: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      internalNotes: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      source: {
+        type: DataTypes.ENUM('web', 'mobile', 'admin'),
+        defaultValue: 'web',
+      },
     },
     {
       tableName: "orders",
       timestamps: true,
+      indexes: [
+        {
+          fields: ['userId']
+        },
+        {
+          fields: ['status']
+        },
+        {
+          fields: ['paymentStatus']
+        },
+        {
+          fields: ['orderDate']
+        },
+        {
+          fields: ['orderNumber']
+        }
+      ]
     }
   );
 
@@ -207,6 +277,10 @@ module.exports = (sequelize) => {
     Order.hasMany(models.OrderHistory, {
       foreignKey: "orderId",
       as: "history",
+    });
+    Order.hasMany(models.Invoice, {
+      foreignKey: "orderId",
+      as: "invoices",
     });
   };
 
