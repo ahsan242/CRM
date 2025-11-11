@@ -9,7 +9,7 @@ require("dotenv").config();
 const db = require("./config/db");
 
 const app = express();
-
+//new
 // --- Middleware ---
 app.use(
   cors({
@@ -92,6 +92,16 @@ try {
 } catch (error) {
   console.error("❌ Error loading analytics routes:", error.message);
 }
+
+try {
+  // Register product inquiry routes
+  const productInquiryRoutes = require("./routes/productInquiryRoutes");
+  app.use("/api/inquiries", productInquiryRoutes);
+  console.log("✅ Product inquiry routes registered manually");
+} catch (error) {
+  console.error("❌ Error loading product inquiry routes:", error.message);
+}
+
 // --- Health Check ---
 app.get("/", (req, res) => {
   res.json({

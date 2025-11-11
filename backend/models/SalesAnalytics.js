@@ -5,6 +5,7 @@ module.exports = (sequelize) => {
     "SalesAnalytics",
     {
       id: {
+        //new
         type: DataTypes.INTEGER,
         autoIncrement: true,
         primaryKey: true,

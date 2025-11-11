@@ -61,6 +61,7 @@ if (fs.existsSync(modelsPath)) {
 } else {
   console.warn("⚠️ Models directory not found:", modelsPath);
 }
+// ne
 
 // ✅ MANUALLY ADD ORDER MANAGEMENT MODELS (since they're new and might not be in models folder yet)
 try {
@@ -192,6 +193,17 @@ try {
   console.log("✅ FinancialReport model loaded manually");
 } catch (error) {
   console.error("❌ Error loading FinancialReport model:", error.message);
+}
+
+// ✅ MANUALLY ADD PRODUCT INQUIRY MODEL
+try {
+  db.ProductInquiry = require("../models/ProductInquiry")(
+    sequelize,
+    Sequelize.DataTypes
+  );
+  console.log("✅ ProductInquiry model loaded manually");
+} catch (error) {
+  console.error("❌ Error loading ProductInquiry model:", error.message);
 }
 
 console.log("✅ Order management models loaded");
