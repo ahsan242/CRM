@@ -416,3 +416,88 @@ exports.mergeCarts = async (req, res) => {
     });
   }
 };
+
+// ====================== GET ALL CARTS (ADMIN ONLY) ======================
+exports.getAllCarts = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, userId, sessionId } = req.query;
+    const offset = (page - 1) * limit;
+
+    const whereClause = {};
+    if (userId) whereClause.userId = userId;
+    if (sessionId) whereClause.sessionId = sessionId;
+
+    const { count, rows: carts } = await Cart.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          model: db.User,
+          as: 'user',
+          attributes: ['id', 'name', 'email', 'role']
+        }
+      ],
+      order: [['updatedAt', 'DESC']],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      distinct: true
+    });
+
+    // Enrich cart items with product details
+    const enrichedCarts = await Promise.all(
+      carts.map(async (cart) => {
+        let totalAmount = 0;
+        let itemCount = 0;
+        const enrichedItems = [];
+
+        if (cart.items && Array.isArray(cart.items)) {
+          for (const item of cart.items) {
+            const product = await Product.findByPk(item.productId);
+            if (product) {
+              const enrichedItem = {
+                ...item,
+                currentPrice: product.price,
+                productDetails: {
+                  title: product.title,
+                  mainImage: product.mainImage,
+                  sku: product.sku,
+                  brandId: product.brandId,
+                  categoryId: product.categoryId,
+                  stockQuantity: product.quantity
+                }
+              };
+              
+              enrichedItems.push(enrichedItem);
+              totalAmount += item.quantity * item.unitPrice;
+              itemCount += item.quantity;
+            }
+          }
+        }
+
+        return {
+          ...cart.toJSON(),
+          items: enrichedItems,
+          totalAmount,
+          itemCount
+        };
+      })
+    );
+
+    res.status(200).json({
+      success: true,
+      data: enrichedCarts,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: count,
+        pages: Math.ceil(count / limit)
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching all carts:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};

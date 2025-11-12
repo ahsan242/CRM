@@ -206,6 +206,13 @@ try {
   console.error("❌ Error loading ProductInquiry model:", error.message);
 }
 
+try {
+  db.PunchoutToken = require("../models/PunchoutToken")(sequelize, Sequelize.DataTypes);
+  console.log("✅ PunchoutToken model loaded manually");
+} catch (error) {
+  console.error("❌ Error loading PunchoutToken model:", error.message);
+}
+
 console.log("✅ Order management models loaded");
 
 // Store seller-specific models

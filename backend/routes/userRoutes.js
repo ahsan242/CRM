@@ -2,7 +2,7 @@
 const express = require("express");
 const router = express.Router();
 const userController = require("../controllers/userController");
-const { protect } = require("../middleware/authMiddleware");
+const { protect,admin } = require("../middleware/authMiddleware");
 
 // Public routes
 router.post("/register", userController.initiateRegistration);
@@ -11,6 +11,8 @@ router.post("/resend-verification", userController.resendVerificationCode);
 router.post("/login", userController.login);
 router.post("/logout", userController.logout);
 router.post("/refresh", userController.refreshToken);
+// Admin only route - get all users
+router.get("/", protect, admin, userController.getAllUsers); // ← Now 'admin' is defined
 
 // Protected routes
 router.get("/profile", protect, userController.getProfile);

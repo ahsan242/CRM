@@ -640,6 +640,55 @@ const logout = (req, res) => {
   });
 };
 
+// ====================== GET ALL USERS (ADMIN ONLY) ======================
+const getAllUsers = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, role, search } = req.query;
+    const offset = (page - 1) * limit;
+
+    const whereClause = {};
+    if (role) whereClause.role = role;
+    if (search) {
+      whereClause[db.Sequelize.Op.or] = [
+        { name: { [db.Sequelize.Op.iLike]: `%${search}%` } },
+        { email: { [db.Sequelize.Op.iLike]: `%${search}%` } }
+      ];
+    }
+
+    const { count, rows: users } = await db.User.findAndCountAll({
+      where: whereClause,
+      attributes: { exclude: ['password'] },
+      include: [{
+        model: db.UserProfile,
+        as: 'profile',
+        attributes: ['phone', 'country', 'city', 'createdAt']
+      }],
+      order: [['createdAt', 'DESC']],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      distinct: true
+    });
+
+    res.status(200).json({
+      success: true,
+      data: users,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: count,
+        pages: Math.ceil(count / limit)
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
 // ====================== RESEND VERIFICATION ======================
 const resendVerificationCode = async (req, res) => {
   try {
@@ -724,5 +773,6 @@ module.exports = {
   refreshToken,
   logout,
   resendVerificationCode,
+  getAllUsers,
   tokenBlacklist
 };

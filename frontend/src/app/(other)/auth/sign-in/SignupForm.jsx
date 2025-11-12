@@ -72,7 +72,10 @@ const SignupForm = () => {
         <div className="mb-3">
           <label className="form-label fw-semibold">Account Type</label>
           <div className="d-flex gap-2 flex-wrap">
-            {["customer", "operator", "admin"].map((role) => (
+            {["customer"
+            // , "operator", "admin"
+
+            ].map((role) => (
               <div key={role}>
                 <input
                   type="radio"

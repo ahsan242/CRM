@@ -102,6 +102,14 @@ try {
   console.error("❌ Error loading product inquiry routes:", error.message);
 }
 
+try {
+  const punchoutRoutes = require("./routes/punchoutRoutes");
+  app.use("/api/punchout", punchoutRoutes);
+  console.log("✅ PunchOut routes registered manually");
+} catch (error) {
+  console.error("❌ Error loading punchout routes:", error.message);
+}
+
 // --- Health Check ---
 app.get("/", (req, res) => {
   res.json({
