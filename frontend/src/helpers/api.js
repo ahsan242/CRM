@@ -1,5 +1,5 @@
 import { getAllUsers } from '@/http/users';
-import { getAllCarts } from '@/http/cart';
+
 
 export const getAllCustomers = async () => {
   try {

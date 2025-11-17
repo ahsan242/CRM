@@ -1,4 +1,5 @@
 const db = require("../config/db");
+const { Op } = require("sequelize");
 const Cart = db.Cart;
 const Product = db.Product;
 
@@ -10,8 +11,11 @@ exports.getCart = async (req, res) => {
     let whereClause = {};
     if (userId) {
       whereClause.userId = userId;
+      // Only return incomplete carts (active or abandoned, not converted)
+      whereClause.status = { [Op.in]: ['active', 'abandoned'] };
     } else if (sessionId) {
       whereClause.sessionId = sessionId;
+      whereClause.status = { [Op.in]: ['active', 'abandoned'] };
     } else {
       return res.status(400).json({
         success: false,
@@ -21,6 +25,7 @@ exports.getCart = async (req, res) => {
 
     const cart = await Cart.findOne({ 
       where: whereClause,
+      order: [['status', 'ASC'], ['updatedAt', 'DESC']], // Prioritize active carts
       include: [
         {
           model: db.User,
@@ -119,9 +124,22 @@ exports.addToCart = async (req, res) => {
 
     let cart;
     if (userId) {
-      cart = await Cart.findOne({ where: { userId } });
+      // Only find incomplete carts (active or abandoned, not converted)
+      // Prioritize active carts over abandoned ones
+      cart = await Cart.findOne({ 
+        where: { 
+          userId,
+          status: { [Op.in]: ['active', 'abandoned'] }
+        },
+        order: [['status', 'ASC'], ['updatedAt', 'DESC']] // 'active' comes before 'abandoned' alphabetically
+      });
     } else if (sessionId) {
-      cart = await Cart.findOne({ where: { sessionId } });
+      cart = await Cart.findOne({ 
+        where: { 
+          sessionId,
+          status: { [Op.in]: ['active', 'abandoned'] }
+        }
+      });
     }
 
     // Create new cart if doesn't exist
@@ -129,13 +147,19 @@ exports.addToCart = async (req, res) => {
       const cartData = {
         items: [],
         totalAmount: 0,
-        itemCount: 0
+        itemCount: 0,
+        status: 'active'
       };
       
       if (userId) cartData.userId = userId;
       if (sessionId) cartData.sessionId = sessionId;
       
       cart = await Cart.create(cartData);
+    } else {
+      // If cart was abandoned, reactivate it when user adds items
+      if (cart.status === 'abandoned') {
+        await cart.update({ status: 'active' });
+      }
     }
 
     // Check if product already in cart
@@ -356,9 +380,20 @@ exports.mergeCarts = async (req, res) => {
       });
     }
 
-    // Find session cart and user cart
-    const sessionCart = await Cart.findOne({ where: { sessionId } });
-    const userCart = await Cart.findOne({ where: { userId } });
+    // Find session cart and user cart (only incomplete carts)
+    const sessionCart = await Cart.findOne({ 
+      where: { 
+        sessionId,
+        status: { [Op.in]: ['active', 'abandoned'] }
+      }
+    });
+    const userCart = await Cart.findOne({ 
+      where: { 
+        userId,
+        status: { [Op.in]: ['active', 'abandoned'] }
+      },
+      order: [['status', 'ASC'], ['updatedAt', 'DESC']]
+    });
 
     if (!sessionCart || !sessionCart.items || sessionCart.items.length === 0) {
       return res.status(200).json({
@@ -390,12 +425,16 @@ exports.mergeCarts = async (req, res) => {
     // Update or create user cart
     let finalCart;
     if (userCart) {
-      await userCart.update({ items: mergedItems });
+      await userCart.update({ 
+        items: mergedItems,
+        status: 'active' // Reactivate if it was abandoned
+      });
       finalCart = userCart;
     } else {
       finalCart = await Cart.create({
         userId,
-        items: mergedItems
+        items: mergedItems,
+        status: 'active'
       });
     }
 

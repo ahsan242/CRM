@@ -213,6 +213,21 @@ try {
   console.error("❌ Error loading PunchoutToken model:", error.message);
 }
 
+// ✅ MANUALLY ADD PRODUCT IMPORT MODELS
+try {
+  db.ProductImportJob = require("../models/ProductImportJob")(sequelize, Sequelize.DataTypes);
+  console.log("✅ ProductImportJob model loaded manually");
+} catch (error) {
+  console.error("❌ Error loading ProductImportJob model:", error.message);
+}
+
+try {
+  db.ProductImportItem = require("../models/ProductImportItem")(sequelize, Sequelize.DataTypes);
+  console.log("✅ ProductImportItem model loaded manually");
+} catch (error) {
+  console.error("❌ Error loading ProductImportItem model:", error.message);
+}
+
 console.log("✅ Order management models loaded");
 
 // Store seller-specific models

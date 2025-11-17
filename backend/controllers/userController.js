@@ -494,61 +494,125 @@ const getUserOrders = async (req, res) => {
 // ====================== UPDATE USER ======================
 const updateUser = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { name, email } = req.body;
-
-    if (req.user.id != id && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        error: "You can only update your own profile"
-      });
-    }
-
-    const user = await User.findByPk(id);
-    if (!user) {
-      return res.status(404).json({ 
-        success: false,
-        error: "User not found" 
-      });
-    }
-
-    if (name || email) {
-      const conflictUser = await User.findOne({
-        where: {
-          [db.Sequelize.Op.or]: [
-            name ? { name } : {},
-            email ? { email } : {},
-          ],
-          id: { [db.Sequelize.Op.ne]: id },
-        },
-      });
-      if (conflictUser) {
+    // Handle file upload first
+    uploadProfilePicture(req, res, async (err) => {
+      if (err) {
         return res.status(400).json({
           success: false,
-          error: "Another user with this name or email already exists",
+          error: err.message
         });
       }
-    }
 
-    await user.update({
-      name: name ?? user.name,
-      email: email ?? user.email,
+      try {
+        const { id } = req.params;
+        const { 
+          name, 
+          email,
+          // UserProfile fields
+          phone,
+          age,
+          country,
+          city,
+          address,
+          postalCode,
+          dateOfBirth,
+          gender
+        } = req.body;
+
+        if (req.user.id != id && req.user.role !== 'admin') {
+          return res.status(403).json({
+            success: false,
+            error: "You can only update your own profile"
+          });
+        }
+
+        const user = await User.findByPk(id);
+        if (!user) {
+          return res.status(404).json({ 
+            success: false,
+            error: "User not found" 
+          });
+        }
+
+        if (name || email) {
+          const conflictUser = await User.findOne({
+            where: {
+              [db.Sequelize.Op.or]: [
+                name ? { name } : {},
+                email ? { email } : {},
+              ],
+              id: { [db.Sequelize.Op.ne]: id },
+            },
+          });
+          if (conflictUser) {
+            return res.status(400).json({
+              success: false,
+              error: "Another user with this name or email already exists",
+            });
+          }
+        }
+
+        // Update user basic info
+        await user.update({
+          name: name ?? user.name,
+          email: email ?? user.email,
+        });
+
+        // Update or create UserProfile
+        let userProfile = await UserProfile.findOne({ where: { userId: id } });
+        
+        const profileUpdateData = {};
+        // Convert empty strings to null for consistency
+        if (phone !== undefined) profileUpdateData.phone = phone && phone.trim() !== '' ? phone.trim() : null;
+        if (age !== undefined) {
+          if (age && age !== '') {
+            const ageNum = parseInt(age);
+            profileUpdateData.age = isNaN(ageNum) ? null : ageNum;
+          } else {
+            profileUpdateData.age = null;
+          }
+        }
+        if (country !== undefined) profileUpdateData.country = country && country.trim() !== '' ? country.trim() : null;
+        if (city !== undefined) profileUpdateData.city = city && city.trim() !== '' ? city.trim() : null;
+        if (address !== undefined) profileUpdateData.address = address && address.trim() !== '' ? address.trim() : null;
+        if (postalCode !== undefined) profileUpdateData.postalCode = postalCode && postalCode.trim() !== '' ? postalCode.trim() : null;
+        if (dateOfBirth !== undefined) profileUpdateData.dateOfBirth = dateOfBirth && dateOfBirth !== '' ? dateOfBirth : null;
+        if (gender !== undefined) profileUpdateData.gender = gender && gender !== '' ? gender : null;
+
+        // Handle profile picture upload
+        if (req.file) {
+          profileUpdateData.profilePicture = req.file.filename;
+        }
+
+        if (userProfile) {
+          await userProfile.update(profileUpdateData);
+        } else if (Object.keys(profileUpdateData).length > 0 || req.file) {
+          // Create profile if it doesn't exist and we have data to update
+          profileUpdateData.userId = id;
+          userProfile = await UserProfile.create(profileUpdateData);
+        }
+
+        const updatedUser = await User.findByPk(id, {
+          attributes: { exclude: ["password"] },
+          include: [{
+            model: UserProfile,
+            as: 'profile'
+          }]
+        });
+
+        res.json({
+          success: true,
+          message: "User updated successfully",
+          data: updatedUser
+        });
+
+      } catch (err) {
+        res.status(500).json({ 
+          success: false,
+          error: err.message 
+        });
+      }
     });
-
-    const updatedUser = await User.findByPk(id, {
-      attributes: { exclude: ["password"] },
-      include: [{
-        model: UserProfile,
-        as: 'profile'
-      }]
-    });
-
-    res.json({
-      success: true,
-      message: "User updated successfully",
-      data: updatedUser
-    });
-
   } catch (err) {
     res.status(500).json({ 
       success: false,

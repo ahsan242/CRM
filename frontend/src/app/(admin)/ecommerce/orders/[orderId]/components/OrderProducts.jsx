@@ -1,17 +1,20 @@
 import { Card, CardBody, CardTitle, Table } from 'react-bootstrap';
 import { currency } from '@/context/constants';
-const OrderProducts = ({
-  order
-}) => {
-  return <Card>
+
+const OrderProducts = ({ order }) => {
+  const items = order.items || [];
+
+  return (
+    <Card>
       <CardBody>
-        <CardTitle as={'h5'} className="mb-3">
-          Products From Order #{order.id}
+        <CardTitle as="h5" className="mb-3">
+          Products From Order #{order.orderNumber || order.id}
         </CardTitle>
         <div className="table-responsive">
           <Table className="table table-centered table-dashed mb-0">
-            <thead className="table-">
+            <thead>
               <tr>
+                <th>Product</th>
                 <th>Product Name</th>
                 <th>Quantity</th>
                 <th>Price</th>
@@ -19,34 +22,52 @@ const OrderProducts = ({
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>G15 Gaming Laptop</td>
-                <td>3</td>
-                <td>{currency}240.59</td>
-                <td>{currency}721.77</td>
-              </tr>
-              <tr>
-                <td>Sony Alpha ILCE 6000Y 24.3 MP Mirrorless Digital SLR Camera</td>
-                <td>5</td>
-                <td>{currency}135.99</td>
-                <td>{currency}679.95</td>
-              </tr>
-              <tr>
-                <td>Sony Over-Ear Wireless Headphone with Mic</td>
-                <td>1</td>
-                <td>{currency}99.49</td>
-                <td>{currency}99.49</td>
-              </tr>
-              <tr>
-                <td>Adam ROMA USB-C / USB-A 3.1 (2-in-1 Flash Drive) – 128GB</td>
-                <td>2</td>
-                <td>{currency}350.19</td>
-                <td>700.38</td>
-              </tr>
+              {items.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-center text-muted py-4">
+                    No items found
+                  </td>
+                </tr>
+              ) : (
+                items.map((item, index) => (
+                  <tr key={item.id || index}>
+                    <td>
+                      {item.product?.mainImage ? (
+                        <img
+                          src={`http://localhost:5000/uploads/products/${item.product.mainImage}`}
+                          alt={item.productName || item.product?.title}
+                          className="img-fluid rounded"
+                          style={{ width: '50px', height: '50px', objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <div className="bg-light rounded d-flex align-items-center justify-content-center" style={{ width: '50px', height: '50px' }}>
+                          <span className="text-muted">-</span>
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      <div>
+                        <strong>{item.productName || item.product?.title || 'Product'}</strong>
+                        {item.productSku && (
+                          <small className="d-block text-muted">SKU: {item.productSku}</small>
+                        )}
+                        {item.sellerName && (
+                          <small className="d-block text-muted">Seller: {item.sellerName}</small>
+                        )}
+                      </div>
+                    </td>
+                    <td>{item.quantity}</td>
+                    <td>{currency}{parseFloat(item.unitPrice || 0).toFixed(2)}</td>
+                    <td className="fw-semibold">{currency}{parseFloat(item.totalPrice || 0).toFixed(2)}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </Table>
         </div>
       </CardBody>
-    </Card>;
+    </Card>
+  );
 };
+
 export default OrderProducts;

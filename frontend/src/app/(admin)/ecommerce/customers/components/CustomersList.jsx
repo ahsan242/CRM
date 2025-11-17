@@ -3,7 +3,8 @@ import IconifyIcon from '@/components/wrappers/IconifyIcon';
 import CustomersListView from './CustomersListView';
 import CustomersGrid from './CustomersGrid';
 const CustomersList = ({
-  customers
+  customers,
+  onCustomerUpdated
 }) => {
   return <TabContainer defaultActiveKey={'1'}>
       <Row>
@@ -75,7 +76,7 @@ const CustomersList = ({
 
       <TabContent className="pt-0">
         <TabPane eventKey={'1'} id="team-list">
-          <CustomersListView customers={customers} />
+          <CustomersListView customers={customers} onCustomerUpdated={onCustomerUpdated} />
         </TabPane>
         <TabPane eventKey={'0'} id="team-grid">
           <CustomersGrid customers={customers} />

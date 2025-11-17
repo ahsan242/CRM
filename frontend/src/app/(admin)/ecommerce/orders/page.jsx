@@ -4,15 +4,29 @@ import { Link } from 'react-router-dom';
 import PageBreadcrumb from '@/components/layout/PageBreadcrumb';
 import PageMetaData from '@/components/PageTitle';
 import IconifyIcon from '@/components/wrappers/IconifyIcon';
-import { getAllOrders } from '@/helpers/data';
+import * as orderService from '@/http/order';
 import { useEffect, useState } from 'react';
+import { currency } from '@/context/constants';
+
 const Orders = () => {
-  const [orders, setOrders] = useState();
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    (async () => {
-      const data = await getAllOrders();
-      setOrders(data);
-    })();
+    const fetchOrders = async () => {
+      try {
+        setLoading(true);
+        const response = await orderService.getOrders();
+        if (response.success) {
+          setOrders(response.data.orders || response.data || []);
+        }
+      } catch (error) {
+        console.error('Error fetching orders:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOrders();
   }, []);
   return <>
       <PageBreadcrumb subName="Ecommerce" title="Orders List" />
@@ -66,30 +80,81 @@ const Orders = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {orders && orders.map((order, idx) => {
-                  return <tr key={idx}>
+                  {loading ? (
+                    <tr>
+                      <td colSpan={9} className="text-center py-4">
+                        <div className="spinner-border text-primary" role="status">
+                          <span className="visually-hidden">Loading...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : orders.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="text-center py-4 text-muted">
+                        No orders found
+                      </td>
+                    </tr>
+                  ) : (
+                    orders.map((order, idx) => {
+                      const firstItem = order.items && order.items.length > 0 ? order.items[0] : null;
+                      const shippingAddress = order.shippingAddress || {};
+                      const addressString = shippingAddress.street 
+                        ? `${shippingAddress.street}, ${shippingAddress.city}, ${shippingAddress.state} ${shippingAddress.zipCode}`
+                        : 'N/A';
+                      
+                      return (
+                        <tr key={order.id || idx}>
                           <td>
-                            <Link to={`/ecommerce/orders/${order.id}`}>{order.id}</Link>
+                            <Link to={`/ecommerce/orders/${order.id}`}>
+                              #{order.orderNumber || order.id}
+                            </Link>
                           </td>
-                          <td>{new Date(order.createdAt).toLocaleDateString()}</td>
-                          {order.product && <td>
-                              <img src={order.product?.images[0]} alt="product-1(1)" className="img-fluid avatar-sm" />
-                            </td>}
+                          <td>{new Date(order.orderDate || order.createdAt).toLocaleDateString()}</td>
                           <td>
-                            <Link to="">{order.customer?.name}</Link>
+                            {firstItem?.product?.mainImage ? (
+                              <img 
+                                src={`http://localhost:5000/uploads/products/${firstItem.product.mainImage}`} 
+                                alt={firstItem.product.title || 'Product'} 
+                                className="img-fluid avatar-sm" 
+                              />
+                            ) : (
+                              <span className="text-muted">-</span>
+                            )}
                           </td>
-                          <td>{order.customer?.email}</td>
-                          <td>{order.customer?.phone}</td>
-                          <td>{order.customer?.address}</td>
-                          <td>{order.paymentMethod}</td>
+                          <td>
+                            <Link to="">{order.user?.name || 'N/A'}</Link>
+                          </td>
+                          <td>{order.user?.email || 'N/A'}</td>
+                          <td>{shippingAddress.phone || 'N/A'}</td>
+                          <td className="text-truncate" style={{ maxWidth: '200px' }} title={addressString}>
+                            {addressString}
+                          </td>
+                          <td>{order.paymentMethod || 'N/A'}</td>
                           <td>
                             <div className="icons-center">
-                              <IconifyIcon icon="bxs:circle" className={clsx('me-1', order.status === 'Cancelled' ? 'text-danger' : order.status == 'Processing' ? 'text-primary' : 'text-success')} />
-                              {order.status}
+                              <IconifyIcon 
+                                icon="bxs:circle" 
+                                className={clsx('me-1', 
+                                  order.status === 'cancelled' ? 'text-danger' : 
+                                  order.status === 'pending' || order.status === 'processing' ? 'text-primary' : 
+                                  order.status === 'confirmed' || order.status === 'delivered' ? 'text-success' : 
+                                  'text-warning'
+                                )} 
+                              />
+                              {order.status || 'N/A'}
                             </div>
+                            {order.paymentStatus && (
+                              <small className={clsx('d-block', 
+                                order.paymentStatus === 'paid' ? 'text-success' : 'text-warning'
+                              )}>
+                                Payment: {order.paymentStatus}
+                              </small>
+                            )}
                           </td>
-                        </tr>;
-                })}
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>

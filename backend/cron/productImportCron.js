@@ -1,16 +1,7 @@
 
 // src/cron/productImportCron.js
 const cron = require('node-cron');
-const db = require("./../config/db"); // FIXED: Added extra dot for correct path
-const ProductImportJob = db.ProductImportJob;
-const ProductImportItem = db.ProductImportItem;
-const Product = db.Product;
-const Brand = db.Brand;
-const Image = db.Image;
-const SubCategory = db.SubCategory;
-const TechSpecGroup = db.TechSpecGroup;
-const TechProductName = db.TechProductName;
-const TechProduct = db.TechProduct;
+const db = require("./../config/db");
 const axios = require('axios');
 const path = require('path');
 const fs = require('fs');
@@ -20,6 +11,18 @@ class ProductImportCron {
   constructor() {
     this.isProcessing = false;
     this.currentJobId = null;
+    
+    // Get models from db - these will be available after db is connected
+    this.ProductImportJob = db.ProductImportJob;
+    this.ProductImportItem = db.ProductImportItem;
+    this.Product = db.Product;
+    this.Brand = db.Brand;
+    this.Image = db.Image;
+    this.SubCategory = db.SubCategory;
+    this.TechSpecGroup = db.TechSpecGroup;
+    this.TechProductName = db.TechProductName;
+    this.TechProduct = db.TechProduct;
+    
     this.setupCron();
   }
 
@@ -27,16 +30,20 @@ class ProductImportCron {
     // Run every 15 minutes
     cron.schedule('*/15 * * * *', () => {
       console.log('🕒 Cron job triggered - checking for scheduled jobs...');
-      this.processScheduledJobs();
+      this.processScheduledJobs().catch(err => {
+        console.error('❌ Error in scheduled cron job:', err);
+      });
     });
 
-    // Also run immediately on startup (after 10 seconds)
+    // Also run immediately on startup (after 10 seconds to ensure DB is ready)
     setTimeout(() => {
       console.log('🚀 Initial cron job check on startup');
-      this.processScheduledJobs();
+      this.processScheduledJobs().catch(err => {
+        console.error('❌ Error in initial cron job check:', err);
+      });
     }, 10000);
 
-    console.log('✅ Product Import Cron Job initialized - running every 5 minutes');
+    console.log('✅ Product Import Cron Job initialized - running every 15 minutes');
   }
 
   async processScheduledJobs() {
@@ -45,20 +52,29 @@ class ProductImportCron {
       return { success: false, message: 'Import process already running' };
     }
 
+    // Check if database is connected
+    try {
+      await db.sequelize.authenticate();
+    } catch (error) {
+      console.error('❌ Database not connected, skipping cron job:', error.message);
+      return { success: false, error: 'Database not connected' };
+    }
+
+    // Check if models are available
+    if (!this.ProductImportJob || !this.ProductImportItem) {
+      console.error('❌ ProductImportJob or ProductImportItem models not available');
+      return { success: false, error: 'Models not loaded' };
+    }
+
     this.isProcessing = true;
 
     try {
       console.log('🔍 Checking for scheduled import jobs...');
       
-      // FIXED: Remove the scheduledFor condition since the column doesn't exist
-      const scheduledJobs = await ProductImportJob.findAll({
+      // Find scheduled jobs
+      const scheduledJobs = await this.ProductImportJob.findAll({
         where: { 
           status: 'scheduled'
-          // Remove the scheduledFor condition since the column doesn't exist in your database
-          // [Op.or]: [
-          //   { scheduledFor: null },
-          //   { scheduledFor: { [Op.lte]: new Date() } }
-          // ]
         },
         order: [['createdAt', 'ASC']],
         limit: 1
@@ -100,7 +116,7 @@ class ProductImportCron {
         progress: 0
       });
 
-      const items = await ProductImportItem.findAll({
+      const items = await this.ProductImportItem.findAll({
         where: { jobId: job.id, status: 'pending' },
         order: [['orderIndex', 'ASC']]
       });
@@ -200,11 +216,12 @@ class ProductImportCron {
       }
 
       // Process the product using your existing logic
+      // Get price and quantity from item, default to 0 if not set
       const product = await this.createProductFromIcecat(response.data, {
         productCode: item.productCode,
         brand: item.brand,
-        price: item.price || 0,
-        quantity: item.quantity || 0
+        price: parseFloat(item.price) || 0,
+        quantity: parseInt(item.quantity) || 0
       });
       
       await item.update({
@@ -243,9 +260,9 @@ class ProductImportCron {
       const endOfLifeDate = this.extractEndOfLifeDate(icecatData);
 
       // Ensure brand exists
-      let brandRecord = await Brand.findOne({ where: { title: brand } });
+      let brandRecord = await this.Brand.findOne({ where: { title: brand } });
       if (!brandRecord) {
-        brandRecord = await Brand.create({ title: brand });
+        brandRecord = await this.Brand.create({ title: brand });
         console.log(`🏷️ Created new brand: ${brand}`);
       }
 
@@ -268,9 +285,9 @@ class ProductImportCron {
 
       // Handle category
       const Category = icecatData.data?.GeneralInfo?.Category?.Name?.Value;
-      let subCategory = await SubCategory.findOne({ where: { title: Category } });
+      let subCategory = await this.SubCategory.findOne({ where: { title: Category } });
       if (!subCategory) {
-        subCategory = await SubCategory.create({ 
+        subCategory = await this.SubCategory.create({ 
           title: Category || 'Uncategorized', 
           parentId: 1 
         });
@@ -322,15 +339,15 @@ class ProductImportCron {
         await this.cleanupProductAssets(existingProduct.id);
         
         // Update the product
-        await Product.update(productCreateData, {
+        await this.Product.update(productCreateData, {
           where: { id: existingProduct.id }
         });
         
-        product = await Product.findByPk(existingProduct.id);
+        product = await this.Product.findByPk(existingProduct.id);
         console.log(`✅ Updated existing product: ${product.title}`);
       } else {
         // Create new product
-        product = await Product.create(productCreateData);
+        product = await this.Product.create(productCreateData);
         console.log(`🆕 Created new product: ${product.title}`);
       }
 
@@ -347,7 +364,7 @@ class ProductImportCron {
           const galleryImageFilename = await this.downloadGalleryImage(imgUrl, productCode, index);
           
           if (galleryImageFilename) {
-            await Image.create({
+            await this.Image.create({
               imageTitle: `Image ${index + 1}`,
               url: galleryImageFilename,
               productId: product.id,
@@ -402,7 +419,7 @@ class ProductImportCron {
   async findExistingProduct(productCode, brandId, upc) {
     try {
       // Check by SKU and brand
-      const productBySku = await Product.findOne({
+      const productBySku = await this.Product.findOne({
         where: { sku: productCode, brandId: brandId }
       });
       if (productBySku) {
@@ -412,7 +429,7 @@ class ProductImportCron {
 
       // Check by UPC
       if (upc && upc !== "Null") {
-        const productByUpc = await Product.findOne({ where: { upcCode: upc } });
+        const productByUpc = await this.Product.findOne({ where: { upcCode: upc } });
         if (productByUpc) {
           console.log(`🔍 Found existing product by UPC: ${upc}`);
           return productByUpc;
@@ -502,11 +519,11 @@ class ProductImportCron {
 
   async cleanupProductAssets(productId) {
     try {
-      const imageCount = await Image.count({ where: { productId } });
-      const techSpecCount = await TechProduct.count({ where: { productId } });
+      const imageCount = await this.Image.count({ where: { productId } });
+      const techSpecCount = await this.TechProduct.count({ where: { productId } });
       
-      await Image.destroy({ where: { productId } });
-      await TechProduct.destroy({ where: { productId } });
+      await this.Image.destroy({ where: { productId } });
+      await this.TechProduct.destroy({ where: { productId } });
       
       console.log(`✅ Cleared assets for product ID: ${productId} (${imageCount} images, ${techSpecCount} tech specs)`);
     } catch (error) {
@@ -524,28 +541,28 @@ class ProductImportCron {
 
       let specCount = 0;
       for (const group of featuresGroups) {
-        let techSpecGroup = await TechSpecGroup.findOne({
+        let techSpecGroup = await this.TechSpecGroup.findOne({
           where: { title: group.FeatureGroup?.Name?.Value }
         });
 
         if (!techSpecGroup) {
-          techSpecGroup = await TechSpecGroup.create({
+          techSpecGroup = await this.TechSpecGroup.create({
             title: group.FeatureGroup?.Name?.Value || 'General'
           });
         }
 
         for (const feature of group.Features || []) {
-          let techProductName = await TechProductName.findOne({
+          let techProductName = await this.TechProductName.findOne({
             where: { title: feature.Feature?.Name?.Value }
           });
 
           if (!techProductName) {
-            techProductName = await TechProductName.create({
+            techProductName = await this.TechProductName.create({
               title: feature.Feature?.Name?.Value || 'Unknown'
             });
           }
 
-          await TechProduct.create({
+          await this.TechProduct.create({
             specId: techProductName.id,
             value: feature.PresentationValue || feature.RawValue || feature.Value || '',
             techspecgroupId: techSpecGroup.id,
@@ -578,9 +595,9 @@ class ProductImportCron {
 
   async getJobStatus(jobId) {
     try {
-      const job = await ProductImportJob.findByPk(jobId, {
+      const job = await this.ProductImportJob.findByPk(jobId, {
         include: [{
-          model: ProductImportItem,
+          model: this.ProductImportItem,
           as: 'items'
         }]
       });

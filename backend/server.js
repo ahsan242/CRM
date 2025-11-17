@@ -137,16 +137,32 @@ let cronInstance = null;
 // Initialize and register cron job routes
 const initializeCronJob = () => {
   try {
+    // Check if database is connected
+    if (!db.sequelize) {
+      console.error("❌ Database not available, cannot initialize cron job");
+      return;
+    }
+
+    // Check if required models are loaded
+    if (!db.ProductImportJob || !db.ProductImportItem) {
+      console.error("❌ ProductImportJob or ProductImportItem models not loaded");
+      return;
+    }
+
     // CORRECT PATH: Your file is in ./cron/productImportCron.js
     const ProductImportCron = require("./cron/productImportCron");
     cronInstance = new ProductImportCron();
 
     console.log("✅ Product Import Cron Job initialized with API endpoints");
+    console.log("   - Runs every 15 minutes");
+    console.log("   - Checks for scheduled import jobs");
+    console.log("   - Processes jobs automatically");
   } catch (error) {
     console.error(
       "❌ Failed to initialize Product Import Cron Job:",
       error.message
     );
+    console.error("   Stack:", error.stack);
     // Don't crash the server if cron job fails to initialize
   }
 };
@@ -284,8 +300,11 @@ const startServer = async () => {
       // Don't crash the server if enum sync fails
     }
 
-    // ✅ INITIALIZE PRODUCT IMPORT CRON JOB
-    initializeCronJob();
+    // ✅ INITIALIZE PRODUCT IMPORT CRON JOB (after DB is connected)
+    // Wait a bit to ensure all models are fully loaded
+    setTimeout(() => {
+      initializeCronJob();
+    }, 2000);
 
     // Start the server
     app.listen(PORT, "0.0.0.0", () => {

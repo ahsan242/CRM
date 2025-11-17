@@ -57,6 +57,15 @@ exports.createOrder = async (req, res) => {
       });
     }
 
+    // Ensure cart is not already converted
+    if (cart.status === 'converted') {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        error: "This cart has already been converted to an order"
+      });
+    }
+
     // Validate stock and prepare order items
     const orderItems = [];
     let subtotal = 0;
@@ -177,11 +186,12 @@ exports.createOrder = async (req, res) => {
       status: 'draft'
     }, { transaction });
 
-    // Clear cart
+    // Mark cart as converted and clear it
     await cart.update({
       items: [],
       totalAmount: 0,
-      itemCount: 0
+      itemCount: 0,
+      status: 'converted'
     }, { transaction });
 
     await transaction.commit();

@@ -19,6 +19,8 @@ const EcommerceCustomers = lazy(() => import('@/app/(admin)/ecommerce/customers/
 const EcommerceSellers = lazy(() => import('@/app/(admin)/ecommerce/sellers/page'));
 const EcommerceOrders = lazy(() => import('@/app/(admin)/ecommerce/orders/page'));
 const EcommerceOrderDetails = lazy(() => import('@/app/(admin)/ecommerce/orders/[orderId]/page'));
+const EcommerceCart = lazy(() => import('@/app/(admin)/ecommerce/products/Cart'));
+const EcommerceCheckout = lazy(() => import('@/app/(admin)/ecommerce/checkout/page'));
 const EcommerceInventory = lazy(() => import('@/app/(admin)/ecommerce/inventory/page'));
 const Chat = lazy(() => import('@/app/(admin)/apps/chat/page'));
 const Email = lazy(() => import('@/app/(admin)/apps/email/page'));
@@ -207,6 +209,14 @@ const appsRoutes = [{
   name: 'Order Details',
   path: '/ecommerce/orders/:orderId',
   element: <EcommerceOrderDetails />
+}, {
+  name: 'Cart',
+  path: '/ecommerce/cart',
+  element: <EcommerceCart />
+}, {
+  name: 'Checkout',
+  path: '/ecommerce/checkout',
+  element: <EcommerceCheckout />
 }, {
   name: 'Inventory',
   path: '/ecommerce/inventory',
